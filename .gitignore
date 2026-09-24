@@ -1,0 +1,48 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Logs
+*.log
+logs/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.crt
+*.cer
+*.keystore
+
+# Java / Maven
+backend/**/target/
+!backend/.mvn/wrapper/maven-wrapper.jar
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# Local database / runtime data
+data/
+*.db
+*.mv.db
+*.trace.db
+
+# Deployment-only local scripts/configs
+upload/
+
+# Generated / accidental top-level artifacts
+META-INF/

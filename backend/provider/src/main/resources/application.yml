@@ -1,0 +1,126 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: guangying-backend
+
+  # ========== 本地开发：排除 Redis/Redisson 自动配置 ==========
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+
+  # ========== 数据源配置（H2 内嵌数据库，开箱即用） ==========
+  datasource:
+    url: jdbc:h2:mem:guangying;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 10000
+      pool-name: GuangyingHikariPool
+
+  # H2 Web 控制台
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
+
+  # SQL 初始化（每次启动自动建表+填充数据）
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+      encoding: UTF-8
+
+# ========== MyBatis-Plus ==========
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    default-statement-timeout: 5
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  mapper-locations: classpath*:mapper/**/*.xml
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# ========== JWT ==========
+guangying:
+  jwt:
+    secret: ${JWT_SECRET:change-me-to-a-random-256-bit-jwt-secret-at-least-32-chars}
+    expire-hours: 72
+  rate-limit:
+    max-requests: 100
+    window-seconds: 60
+
+# ========== 日志 ==========
+logging:
+  level:
+    root: INFO
+    com.guangying: DEBUG
+    com.guangying.dao: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+# ========== Docker Profile（MySQL + Redis + RocketMQ 全栈） ==========
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+  # 开启 Redis/Redisson 自动配置（RocketMQ 通过 rocketmq-spring-boot-starter 自动启用）
+  autoconfigure:
+    exclude: []
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:3306/guangying?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&connectTimeout=3000&socketTimeout=8000
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${MYSQL_USER:guangying}
+    password: ${MYSQL_PASSWORD:}
+  sql:
+    init:
+      mode: never
+  h2:
+    console:
+      enabled: false
+
+  # ========== Redis ==========
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 3000ms
+
+
+# ========== RocketMQ ==========
+rocketmq:
+  name-server: ${ROCKETMQ_NAMESRV:rocketmq-namesrv:9876}
+  producer:
+    group: guangying_producer_group
+  consumer:
+    group: guangying_consumer_group
+
+mybatis-plus:
+  configuration:
+    default-statement-timeout: 5
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl

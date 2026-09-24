@@ -1,0 +1,111 @@
+name: guangying-loadtest
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: guangying-loadtest-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: loadtest-root-password
+      MYSQL_DATABASE: guangying
+      MYSQL_USER: guangying
+      MYSQL_PASSWORD: loadtest-app-password
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max-connections=200
+      - --innodb-buffer-pool-size=128M
+      - --performance-schema=OFF
+    volumes:
+      - ../docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/mysql
+    ports:
+      - "127.0.0.1:13306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -ploadtest-root-password"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - loadtest-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: guangying-loadtest-redis
+    command: redis-server --appendonly no --maxmemory 96mb --maxmemory-policy allkeys-lru
+    tmpfs:
+      - /data
+    ports:
+      - "127.0.0.1:16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+    networks:
+      - loadtest-net
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.1.4
+    container_name: guangying-loadtest-namesrv
+    command: sh mqnamesrv
+    environment:
+      JAVA_OPT_EXT: "-Xms64m -Xmx128m -Xmn32m -XX:MaxDirectMemorySize=64m"
+    tmpfs:
+      - /home/rocketmq/logs
+    ports:
+      - "127.0.0.1:19876:9876"
+    networks:
+      - loadtest-net
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.4
+    container_name: guangying-loadtest-broker
+    command: sh mqbroker -n rocketmq-namesrv:9876 -c /home/rocketmq/conf/broker.conf
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      JAVA_OPT_EXT: "-Xms128m -Xmx256m -Xmn64m -XX:MaxDirectMemorySize=128m"
+    volumes:
+      - ./rocketmq-broker.conf:/home/rocketmq/conf/broker.conf:ro
+    tmpfs:
+      - /home/rocketmq/data
+      - /home/rocketmq/logs
+    ports:
+      - "127.0.0.1:10909:10909"
+      - "127.0.0.1:10911:10911"
+    depends_on:
+      - rocketmq-namesrv
+    networks:
+      - loadtest-net
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: guangying-loadtest-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      MYSQL_HOST: mysql
+      MYSQL_USER: guangying
+      MYSQL_PASSWORD: loadtest-app-password
+      JWT_SECRET: loadtest-jwt-secret-2026-at-least-32-characters
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ROCKETMQ_NAMESRV: rocketmq-namesrv:9876
+      JAVA_OPTS: "-Xms192m -Xmx384m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m"
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rocketmq-broker:
+        condition: service_started
+    networks:
+      - loadtest-net
+
+networks:
+  loadtest-net:
+    driver: bridge

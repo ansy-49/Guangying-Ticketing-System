@@ -1,0 +1,203 @@
+
+# =========================================================
+# 光影票务电影 - Docker Compose 单服务器全栈部署（2G内存优化版）
+#
+# 架构：Next.js(前端) + Spring Boot(后端) + MySQL + Redis + RocketMQ
+# 启动：docker compose up -d --build
+# 访问：http://localhost (Nginx) / http://localhost:3000 (前端开发服务)
+#
+# 内存分配（总计 ~1.5GB，留 ~500MB 给系统+swap）：
+#   MySQL: 350MB | Backend: 350MB | RocketMQ: ~768MB(namesrv+broker)
+#   Redis: 64MB  | Frontend: 128MB | Nginx: 32MB
+# =========================================================
+
+name: guangying
+
+services:
+
+  # =================== MySQL 8 ===================
+  mysql:
+    image: mysql:8.0
+    container_name: guangying-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-guangying}
+      MYSQL_USER: ${MYSQL_USER:-guangying}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max-connections=100
+      - --innodb-buffer-pool-size=96M
+      - --innodb-log-buffer-size=8M
+      - --key-buffer-size=16M
+      - --tmp-table-size=16M
+      - --max-heap-table-size=16M
+      - --table-open-cache=200
+      - --performance-schema=OFF
+    mem_limit: 350m
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - guangying-net
+
+  # =================== Redis 7 ===================
+  redis:
+    image: redis:7-alpine
+    container_name: guangying-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 48mb --maxmemory-policy allkeys-lru
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - guangying-net
+
+
+  # =================== RocketMQ 5.x ===================
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.1.4
+    container_name: rocketmq-namesrv
+    command: sh mqnamesrv
+    restart: unless-stopped
+    environment:
+      JAVA_OPT_EXT: "-Xms64m -Xmx128m -Xmn32m -XX:MaxDirectMemorySize=64m"
+    ports:
+      - "9876:9876"
+    volumes:
+      - rocketmq-namesrv-data:/home/rocketmq/logs
+    mem_limit: 256m
+    networks:
+      - guangying-net
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.4
+    container_name: rocketmq-broker
+    command: sh mqbroker -n rocketmq-namesrv:9876 -c /home/rocketmq/conf/broker.conf
+    restart: unless-stopped
+    ports:
+      - "10911:10911"
+      - "10909:10909"
+    environment:
+      NAMESRV_ADDR: "rocketmq-namesrv:9876"
+      JAVA_OPT_EXT: "-Xms128m -Xmx256m -Xmn64m -XX:MaxDirectMemorySize=128m"
+    volumes:
+      - rocketmq-broker-data:/home/rocketmq/data
+      - rocketmq-broker-logs:/home/rocketmq/logs
+      - ./docker/rocketmq/broker.conf:/home/rocketmq/conf/broker.conf
+    mem_limit: 512m
+    depends_on:
+      - rocketmq-namesrv
+    networks:
+      - guangying-net
+
+  # =================== Spring Boot 后端 ===================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: guangying-backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-guangying}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ROCKETMQ_NAMESRV: rocketmq-namesrv:9876
+      JAVA_OPTS: "-Xms128m -Xmx200m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -Xss256k"
+    mem_limit: 350m
+    expose:
+      - "8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rocketmq-broker:
+        condition: service_started
+    networks:
+      - guangying-net
+
+  # =================== Next.js 前端 (Standalone) ===================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - BACKEND_URL=http://backend:8080
+    container_name: guangying-frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8080
+      NODE_OPTIONS: "--max-old-space-size=96"
+    mem_limit: 128m
+    expose:
+      - "3000"
+    depends_on:
+      - backend
+    networks:
+      - guangying-net
+
+  # =================== Nginx 反向代理 + SSL ===================
+  nginx:
+    image: nginx:alpine
+    container_name: guangying-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx-init.conf:/etc/nginx/nginx.conf:ro
+      - certbot-webroot:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    mem_limit: 32m
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - guangying-net
+
+  # =================== Certbot SSL 证书自动续期 ===================
+  certbot:
+    image: certbot/certbot
+    container_name: guangying-certbot
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    # 每 12 小时检查一次续期（Let's Encrypt 推荐）
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done'"
+    networks:
+      - guangying-net
+
+# =================== 持久化卷 ===================
+volumes:
+  mysql-data:
+  redis-data:
+  rocketmq-namesrv-data:
+  rocketmq-broker-data:
+  rocketmq-broker-logs:
+  certbot-webroot:
+  certbot-certs:
+
+# =================== 网络 ===================
+networks:
+  guangying-net:
+    driver: bridge
