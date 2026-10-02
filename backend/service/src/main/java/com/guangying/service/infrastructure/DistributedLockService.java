@@ -69,8 +69,9 @@ public class DistributedLockService {
      * Execute with Redisson watchdog renewal enabled.
      *
      * <p>Redisson only enables watchdog auto-renewal when no explicit lease time is supplied.
-     * This variant is used by the seat/order critical path so long DB work does not expire the
-     * lock prematurely.</p>
+     * This variant is suitable for cache rebuilds whose execution time depends on a database
+     * query. Lock-infrastructure failures return {@code null}; exceptions thrown by the protected
+     * task are still propagated to the caller.</p>
      */
     public <T> T executeWithWatchdogLock(String lockKey, long waitTime, Supplier<T> task) {
         if (redissonClient == null) {
@@ -78,24 +79,39 @@ public class DistributedLockService {
             return task.get();
         }
         String fullKey = CacheConstants.LOCK_PREFIX + lockKey;
-        RLock lock = redissonClient.getLock(fullKey);
+        RLock lock;
         boolean acquired = false;
         try {
+            lock = redissonClient.getLock(fullKey);
             acquired = lock.tryLock(waitTime, TimeUnit.SECONDS);
             if (!acquired) {
                 log.warn("[Lock] Failed to acquire watchdog lock: {}", fullKey);
                 return null;
             }
             log.debug("[Lock] Acquired watchdog lock: {}", fullKey);
-            return task.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("[Lock] Interrupted while acquiring watchdog lock: {}", fullKey);
             return null;
+        } catch (RuntimeException e) {
+            log.warn("[Lock] Redisson error while acquiring watchdog lock {}, degrading: {}",
+                    fullKey, e.getMessage());
+            return null;
+        }
+
+        try {
+            return task.get();
         } finally {
-            if (acquired && lock.isHeldByCurrentThread()) {
-                lock.unlock();
-                log.debug("[Lock] Released watchdog lock: {}", fullKey);
+            if (acquired) {
+                try {
+                    if (lock.isHeldByCurrentThread()) {
+                        lock.unlock();
+                        log.debug("[Lock] Released watchdog lock: {}", fullKey);
+                    }
+                } catch (RuntimeException e) {
+                    log.warn("[Lock] Redisson error while releasing watchdog lock {}: {}",
+                            fullKey, e.getMessage());
+                }
             }
         }
     }

@@ -124,6 +124,12 @@ public final class CacheConstants {
     /** L2 Redis 默认过期时间(分钟) */
     public static final long L2_EXPIRE_MINUTES = 10;
 
+    /** 热点缓存重建锁最大等待时间（秒），超时后优先保证接口可用性 */
+    public static final long CACHE_REBUILD_LOCK_WAIT_SECONDS = 2;
+
+    /** 空值缓存过期时间（秒），拦截不存在 ID 的重复查询，同时缩短数据恢复窗口 */
+    public static final long CACHE_NULL_EXPIRE_SECONDS = 60;
+
     /** 默认缓存过期时间(分钟) */
     public static final long DEFAULT_EXPIRE_MINUTES = 10;
 

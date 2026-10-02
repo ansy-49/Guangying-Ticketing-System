@@ -126,11 +126,13 @@ public class MovieService {
      */
     public MovieVO getMovieDetail(Long movieId) {
         if (movieId == null) return null;
-        MoviePO po = movieMapper.selectById(movieId);
-        if (po == null || po.getDeleted() == 1) {
-            return null;
-        }
-        return toDetailVO(po);
+        return cacheService.get(CacheConstants.MOVIE_DETAIL_PREFIX + movieId, () -> {
+            MoviePO po = movieMapper.selectById(movieId);
+            if (po == null || po.getDeleted() == 1) {
+                return null;
+            }
+            return toDetailVO(po);
+        });
     }
 
     /**
