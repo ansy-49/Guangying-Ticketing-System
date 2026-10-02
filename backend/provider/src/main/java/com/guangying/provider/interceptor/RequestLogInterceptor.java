@@ -21,7 +21,9 @@ public class RequestLogInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         request.setAttribute(START_TIME, System.currentTimeMillis());
-        log.debug("[请求开始] {} {}", request.getMethod(), request.getRequestURI());
+        log.debug("[请求开始] requestId={} {} {}",
+                request.getAttribute(RequestContextInterceptor.REQUEST_ID_ATTRIBUTE),
+                request.getMethod(), request.getRequestURI());
         return true;
     }
 
@@ -31,7 +33,8 @@ public class RequestLogInterceptor implements HandlerInterceptor {
         Long startTime = (Long) request.getAttribute(START_TIME);
         if (startTime != null) {
             long elapsed = System.currentTimeMillis() - startTime;
-            log.info("[请求完成] {} {} → {} ({}ms)",
+            log.info("[请求完成] requestId={} {} {} → {} ({}ms)",
+                    request.getAttribute(RequestContextInterceptor.REQUEST_ID_ATTRIBUTE),
                     request.getMethod(),
                     request.getRequestURI(),
                     response.getStatus(),
@@ -39,7 +42,9 @@ public class RequestLogInterceptor implements HandlerInterceptor {
 
             // 慢请求告警
             if (elapsed > 1000) {
-                log.warn("[慢请求] {} {} 耗时 {}ms", request.getMethod(), request.getRequestURI(), elapsed);
+                log.warn("[慢请求] requestId={} {} {} 耗时 {}ms",
+                        request.getAttribute(RequestContextInterceptor.REQUEST_ID_ATTRIBUTE),
+                        request.getMethod(), request.getRequestURI(), elapsed);
             }
         }
     }

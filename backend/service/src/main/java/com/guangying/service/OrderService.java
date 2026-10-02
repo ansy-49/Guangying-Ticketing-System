@@ -14,6 +14,7 @@ import com.guangying.domain.model.vo.OrderVO;
 import com.guangying.service.infrastructure.OutboxService;
 import com.guangying.service.infrastructure.QueueService;
 import com.guangying.service.infrastructure.SeatLockScriptService;
+import com.guangying.service.infrastructure.TransactionCallbacks;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class OrderService {
     private final OutboxService outboxService;
     private final SeatLockScriptService lockScriptService;
     private final QueueService queueService;
+    private final TransactionCallbacks transactionCallbacks;
 
     private static final DateTimeFormatter VO_TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -49,13 +51,15 @@ public class OrderService {
                         SeatLockMapper seatLockMapper,
                         OutboxService outboxService,
                         SeatLockScriptService lockScriptService,
-                        QueueService queueService) {
+                        QueueService queueService,
+                        TransactionCallbacks transactionCallbacks) {
         this.orderMapper = orderMapper;
         this.scheduleMapper = scheduleMapper;
         this.seatLockMapper = seatLockMapper;
         this.outboxService = outboxService;
         this.lockScriptService = lockScriptService;
         this.queueService = queueService;
+        this.transactionCallbacks = transactionCallbacks;
     }
 
     /**
@@ -119,17 +123,13 @@ public class OrderService {
         int closed = orderMapper.closePendingOrder(order.getOrderNo(), now);
         if (closed == 0) return;
 
-        // ★ 先释放 Redis 锁（DB 事务之前），防止座位被幽灵锁定
-        releaseRedisLocks(order);
+        List<LockSeatsDTO.SeatPos> positions = loadSeatPositions(order.getOrderNo());
 
         // 回滚库存
         scheduleMapper.rollbackStock(order.getScheduleId(), order.getSeatCount());
 
         // 释放座位锁
         seatLockMapper.releaseOrderLocks(order.getOrderNo());
-
-        // ★ 释放排队入场名额（热门场次准入推进）
-        queueService.leave(order.getScheduleId(), order.getUserId());
 
         // outbox 事件
         Map<String, Object> eventPayload = new LinkedHashMap<>();
@@ -142,29 +142,27 @@ public class OrderService {
         eventPayload.put("timestamp", System.currentTimeMillis());
         outboxService.writeEvent("ORDER_CANCELLED", eventPayload);
 
+        transactionCallbacks.afterCommit(() -> {
+            if (!positions.isEmpty()) {
+                lockScriptService.releaseSeats(
+                        order.getScheduleId(), positions, order.getUserId());
+            }
+            queueService.leave(order.getScheduleId(), order.getUserId());
+        });
+
         log.info("[Order] Closed: orderNo={}, reason={}, seatsReturned={}",
                 order.getOrderNo(), reason, order.getSeatCount());
     }
 
-    /**
-     * 释放订单关联的 Redis 座位锁（best-effort）
-     */
-    private void releaseRedisLocks(OrderPO order) {
-        try {
-            List<SeatLockPO> locks = seatLockMapper.selectLocksByOrderNo(order.getOrderNo());
-            if (locks != null && !locks.isEmpty()) {
-                List<LockSeatsDTO.SeatPos> positions = locks.stream().map(lock -> {
-                    LockSeatsDTO.SeatPos pos = new LockSeatsDTO.SeatPos();
-                    pos.setRow(lock.getRowNum());
-                    pos.setCol(lock.getColNum());
-                    return pos;
-                }).toList();
-                lockScriptService.releaseSeats(order.getScheduleId(), positions, order.getUserId());
-                log.info("[Order] Released {} Redis locks for orderNo={}", positions.size(), order.getOrderNo());
-            }
-        } catch (Exception e) {
-            log.error("[Order] Failed to release Redis locks for orderNo={}", order.getOrderNo(), e);
-        }
+    private List<LockSeatsDTO.SeatPos> loadSeatPositions(String orderNo) {
+        List<SeatLockPO> locks = seatLockMapper.selectLocksByOrderNo(orderNo);
+        if (locks == null) return List.of();
+        return locks.stream().map(lock -> {
+            LockSeatsDTO.SeatPos pos = new LockSeatsDTO.SeatPos();
+            pos.setRow(lock.getRowNum());
+            pos.setCol(lock.getColNum());
+            return pos;
+        }).toList();
     }
 
     private OrderVO toVO(OrderPO po) {

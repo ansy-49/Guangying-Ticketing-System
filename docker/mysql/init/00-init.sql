@@ -245,13 +245,26 @@ CREATE TABLE IF NOT EXISTS order_seat (
 -- Outbox 事件表（业务事务与消息最终一致）
 CREATE TABLE IF NOT EXISTS outbox_event (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id     VARCHAR(64) NOT NULL UNIQUE COMMENT '全局事件ID/消费幂等键',
     event_type   VARCHAR(64) NOT NULL COMMENT 'ORDER_CREATED/ORDER_PAID/ORDER_CANCELLED/ORDER_TIMEOUT',
     payload      TEXT        NOT NULL COMMENT 'JSON 载荷',
-    status       VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/SENT/FAILED',
+    status       VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/PROCESSING/SENT/DEAD',
     create_time  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
     sent_time    TIMESTAMP   NULL,
+    next_retry_time TIMESTAMP NULL,
+    claim_token  VARCHAR(64) NULL,
+    claimed_until TIMESTAMP NULL,
+    last_error   VARCHAR(1000) NULL,
     retries      INT         DEFAULT 0,
     INDEX idx_outbox_status_create (status, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS processed_event (
+    event_id       VARCHAR(64) PRIMARY KEY,
+    event_type     VARCHAR(64) NOT NULL,
+    order_no       VARCHAR(64) NULL,
+    processed_time TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_processed_time (processed_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 

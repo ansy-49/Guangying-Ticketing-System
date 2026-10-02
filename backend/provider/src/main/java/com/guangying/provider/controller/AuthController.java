@@ -31,9 +31,6 @@ public class AuthController {
     @Resource
     private UserService userService;
 
-    @Resource
-    private com.guangying.common.utils.JwtUtil jwtUtil;
-
     /**
      * 用户注册
      */
@@ -57,19 +54,8 @@ public class AuthController {
      */
     @GetMapping("/me")
     public Result<UserVO> me(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return Result.fail(401, "未登录");
-        }
-        try {
-            String token = authHeader.substring(7);
-            if (!jwtUtil.validate(token)) return Result.fail(401, "token无效");
-            Long userId = jwtUtil.getUserId(token);
-            UserVO vo = userService.getUserInfo(userId);
-            if (vo == null) return Result.fail(404, "用户不存在");
-            return Result.success(vo);
-        } catch (Exception e) {
-            return Result.fail(401, "token无效");
-        }
+        Long userId = (Long) request.getAttribute("userId");
+        UserVO vo = userService.getUserInfo(userId);
+        return vo == null ? Result.fail(404, "用户不存在") : Result.success(vo);
     }
 }

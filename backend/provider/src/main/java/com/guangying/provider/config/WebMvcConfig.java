@@ -1,6 +1,7 @@
 package com.guangying.provider.config;
 
 import com.guangying.provider.interceptor.JwtAuthInterceptor;
+import com.guangying.provider.interceptor.RequestContextInterceptor;
 import com.guangying.provider.interceptor.RequestLogInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -16,6 +17,9 @@ import jakarta.annotation.Resource;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     @Resource
+    private RequestContextInterceptor requestContextInterceptor;
+
+    @Resource
     private RequestLogInterceptor requestLogInterceptor;
 
     @Resource
@@ -23,14 +27,22 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(requestContextInterceptor)
+                .order(0)
+                .addPathPatterns("/**")
+                .excludePathPatterns("/h2-console/**", "/static/**");
+
         // 请求日志拦截器 — 全局
         registry.addInterceptor(requestLogInterceptor)
+                .order(10)
                 .addPathPatterns("/**")
                 .excludePathPatterns("/h2-console/**", "/static/**");
 
         // JWT 认证拦截器 — 仅保护需要登录的接口
         registry.addInterceptor(jwtAuthInterceptor)
+                .order(20)
                 .addPathPatterns(
+                        "/api/auth/me",
                         "/api/order/**",    // 订单操作
                         "/api/seat/**",     // 座位操作
                         "/api/payment/**",  // 支付操作

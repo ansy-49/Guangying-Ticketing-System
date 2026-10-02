@@ -22,17 +22,24 @@ public class OutboxEventPO implements Serializable {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 全局事件 ID，同时作为消费幂等键 */
+    private String eventId;
+
     /** 事件类型: ORDER_CREATED / ORDER_PAID / ORDER_CANCELLED / ORDER_TIMEOUT */
     private String eventType;
 
     /** JSON 载荷 */
     private String payload;
 
-    /** PENDING → SENT → FAILED */
+    /** PENDING → PROCESSING → SENT；超过重试上限进入 DEAD */
     private String status;
 
     private LocalDateTime createTime;
     private LocalDateTime sentTime;
+    private LocalDateTime nextRetryTime;
+    private String claimToken;
+    private LocalDateTime claimedUntil;
+    private String lastError;
 
     /** 重试次数 */
     private Integer retries;

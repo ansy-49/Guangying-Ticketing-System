@@ -16,6 +16,7 @@ import com.guangying.service.infrastructure.OutboxService;
 import com.guangying.service.infrastructure.QueueService;
 import com.guangying.service.infrastructure.SeatLockScriptService;
 import com.guangying.service.infrastructure.SeatSoldService;
+import com.guangying.service.infrastructure.TransactionCallbacks;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -60,6 +61,7 @@ public class SeatService {
     private final SeatSoldService soldService;
     private final OutboxService outboxService;
     private final QueueService queueService;
+    private final TransactionCallbacks transactionCallbacks;
 
     @Autowired(required = false)
     private StringRedisTemplate stringRedisTemplate;
@@ -78,7 +80,8 @@ public class SeatService {
                        SeatLockScriptService lockScriptService,
                        SeatSoldService soldService,
                        OutboxService outboxService,
-                       QueueService queueService) {
+                       QueueService queueService,
+                       TransactionCallbacks transactionCallbacks) {
         this.cinemaHallMapper = cinemaHallMapper;
         this.seatLockMapper = seatLockMapper;
         this.orderSeatMapper = orderSeatMapper;
@@ -90,6 +93,7 @@ public class SeatService {
         this.soldService = soldService;
         this.outboxService = outboxService;
         this.queueService = queueService;
+        this.transactionCallbacks = transactionCallbacks;
     }
 
     // ============================================================
@@ -228,19 +232,17 @@ public class SeatService {
             throw new BizException(ResponseCodeEnum.SEAT_LOCKED);
         }
 
-        try {
-            // === 第二阶段：同步建单 ===
-            OrderVO orderVO = createOrderInTransaction(userId, dto);
-            // 锁座成功 → 释放排队入场名额（热门场次准入推进）
-            queueService.leave(scheduleId, userId);
-            return orderVO;
-        } catch (Exception e) {
-            // 补偿：DB 事务失败 → 释放刚写的 Redis 锁
-            lockScriptService.releaseSeats(scheduleId, seats, userId);
-            log.warn("[Seat] DB transaction failed, compensated Redis locks: scheduleId={}, userId={}",
-                    scheduleId, userId, e);
-            throw e;
-        }
+        // DB 提交成功后才释放 Waiting Room 名额；包括 commit-time 异常在内的回滚
+        // 都会在事务真正结束后补偿 Redis 预占锁。
+        transactionCallbacks.register(
+                () -> queueService.leave(scheduleId, userId),
+                () -> {
+                    lockScriptService.releaseSeats(scheduleId, seats, userId);
+                    log.warn("[Seat] Transaction rolled back, Redis locks compensated: scheduleId={}, userId={}",
+                            scheduleId, userId);
+                });
+
+        return createOrderInTransaction(userId, dto);
     }
 
     private OrderVO createOrderInTransaction(Long userId, LockSeatsDTO dto) {
@@ -346,24 +348,24 @@ public class SeatService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void unlockSeats(Long userId, Long scheduleId) {
-        // 1. 先清理 Redis 锁
-        try {
-            List<SeatLockPO> userLocks = seatLockMapper.selectUserLocks(scheduleId, userId, LocalDateTime.now());
-            if (userLocks != null && !userLocks.isEmpty()) {
-                List<LockSeatsDTO.SeatPos> positions = userLocks.stream().map(lock -> {
+        List<SeatLockPO> userLocks =
+                seatLockMapper.selectUserLocks(scheduleId, userId, LocalDateTime.now());
+        List<LockSeatsDTO.SeatPos> positions = userLocks == null
+                ? List.of()
+                : userLocks.stream().map(lock -> {
                     LockSeatsDTO.SeatPos pos = new LockSeatsDTO.SeatPos();
                     pos.setRow(lock.getRowNum());
                     pos.setCol(lock.getColNum());
                     return pos;
                 }).toList();
+
+        int released = seatLockMapper.releaseUserLocks(scheduleId, userId);
+        transactionCallbacks.afterCommit(() -> {
+            if (!positions.isEmpty()) {
                 lockScriptService.releaseSeats(scheduleId, positions, userId);
             }
-        } catch (Exception e) {
-            log.warn("[Seat] Failed to release Redis locks for user={}, schedule={}", userId, scheduleId, e);
-        }
-
-        // 2. 再删 DB 锁记录
-        int released = seatLockMapper.releaseUserLocks(scheduleId, userId);
+            queueService.leave(scheduleId, userId);
+        });
         log.info("[Seat] Released {} DB locks for user={}, schedule={}", released, userId, scheduleId);
     }
 

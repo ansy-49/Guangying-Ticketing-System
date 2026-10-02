@@ -1,10 +1,10 @@
 package com.guangying.service.aspect;
 
 import com.guangying.common.annotation.RateLimit;
-import com.guangying.common.enums.RateLimitAlgorithm;
 import com.guangying.domain.exception.BizException;
 import com.guangying.domain.enums.ResponseCodeEnum;
-import com.guangying.service.infrastructure.RateLimiterService;
+import com.guangying.service.ratelimit.RateLimitContext;
+import com.guangying.service.ratelimit.RateLimitStrategyRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +33,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @RequiredArgsConstructor
 public class RateLimitAspect {
 
-    private final RateLimiterService rateLimiterService;
+    private final RateLimitStrategyRegistry strategyRegistry;
 
     @Around("@annotation(rateLimit)")
     public Object around(ProceedingJoinPoint pjp, RateLimit rateLimit) throws Throwable {
@@ -45,21 +45,15 @@ public class RateLimitAspect {
 
         String identifier = getClientIdentifier();
 
-        // 根据注解配置的算法分发
-        boolean allowed;
-        if (rateLimit.algorithm() == RateLimitAlgorithm.TOKEN_BUCKET) {
-            allowed = rateLimiterService.isAllowedTokenBucket(
-                    key, identifier,
-                    rateLimit.capacity(),
-                    rateLimit.refillRate()
-            );
-        } else {
-            allowed = rateLimiterService.isAllowed(
-                    key, identifier,
-                    rateLimit.maxRequests(),
-                    rateLimit.windowSeconds()
-            );
-        }
+        RateLimitContext context = new RateLimitContext(
+                key,
+                identifier,
+                rateLimit.maxRequests(),
+                rateLimit.windowSeconds(),
+                rateLimit.capacity(),
+                rateLimit.refillRate()
+        );
+        boolean allowed = strategyRegistry.resolve(rateLimit.algorithm()).isAllowed(context);
 
         if (!allowed) {
             throw new BizException(ResponseCodeEnum.RATE_LIMITED);

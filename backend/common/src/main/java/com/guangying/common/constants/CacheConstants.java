@@ -78,6 +78,12 @@ public final class CacheConstants {
     /** 入场令牌: queue:token:{scheduleId}:{userId} — String "1", 带 TTL */
     public static final String QUEUE_TOKEN_PREFIX = "queue:token:";
 
+    /** 入场租约: queue:lease:{scheduleId} — ZSet, member=userId, score=租约到期毫秒时间戳 */
+    public static final String QUEUE_LEASE_PREFIX = "queue:lease:";
+
+    /** 所有启用 Waiting Room 的场次 ID，用于定时回收过期租约 */
+    public static final String QUEUE_HOT_SCHEDULES_KEY = "queue:hot:schedules";
+
     /** 入场令牌 TTL（秒）：10 分钟内完成锁座，否则自动释放名额 */
     public static final int QUEUE_TOKEN_TTL_SECONDS = 600;
 

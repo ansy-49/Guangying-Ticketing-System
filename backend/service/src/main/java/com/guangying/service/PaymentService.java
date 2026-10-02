@@ -9,6 +9,7 @@ import com.guangying.dao.mapper.UserMapper;
 import com.guangying.domain.enums.OrderStatusEnum;
 import com.guangying.domain.enums.ResponseCodeEnum;
 import com.guangying.domain.exception.BizException;
+import com.guangying.domain.exception.OrderExpiredException;
 import com.guangying.domain.model.dto.LockSeatsDTO;
 import com.guangying.domain.model.po.OrderPO;
 import com.guangying.domain.model.po.OrderSeatPO;
@@ -19,6 +20,7 @@ import com.guangying.service.infrastructure.OutboxService;
 import com.guangying.service.infrastructure.QueueService;
 import com.guangying.service.infrastructure.SeatLockScriptService;
 import com.guangying.service.infrastructure.SeatSoldService;
+import com.guangying.service.infrastructure.TransactionCallbacks;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,7 @@ public class PaymentService {
     private final SeatSoldService soldService;
     private final OutboxService outboxService;
     private final QueueService queueService;
+    private final TransactionCallbacks transactionCallbacks;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -62,7 +65,8 @@ public class PaymentService {
                           SeatLockScriptService lockScriptService,
                           SeatSoldService soldService,
                           OutboxService outboxService,
-                          QueueService queueService) {
+                          QueueService queueService,
+                          TransactionCallbacks transactionCallbacks) {
         this.orderMapper = orderMapper;
         this.seatLockMapper = seatLockMapper;
         this.orderSeatMapper = orderSeatMapper;
@@ -72,12 +76,16 @@ public class PaymentService {
         this.soldService = soldService;
         this.outboxService = outboxService;
         this.queueService = queueService;
+        this.transactionCallbacks = transactionCallbacks;
     }
 
     /**
      * 支付订单 — DB 强一致 + 懒过期
      */
-    @Transactional(rollbackFor = Exception.class, timeout = 8)
+    @Transactional(
+            rollbackFor = Exception.class,
+            noRollbackFor = OrderExpiredException.class,
+            timeout = 8)
     public OrderVO payOrder(Long userId, String orderNo) {
         // 1. 查订单
         OrderPO order = selectUserOrder(userId, orderNo);
@@ -92,7 +100,8 @@ public class PaymentService {
         }
         if (order.getExpireTime() != null && now.isAfter(order.getExpireTime())) {
             closeExpiredOrder(order, now);
-            throw new BizException(ResponseCodeEnum.SEAT_LOCK_EXPIRED);
+            // closeExpiredOrder 的 DB 状态与 Outbox 必须先提交，再向调用方返回过期提示。
+            throw new OrderExpiredException();
         }
 
         // 3. 验证锁座记录
@@ -151,11 +160,10 @@ public class PaymentService {
         eventPayload.put("timestamp", System.currentTimeMillis());
         outboxService.writeEvent("ORDER_PAID", eventPayload);
 
-        // 8. 事务后 best-effort：更新 Redis 投影（在 finally 或事务后触发）
-        updateRedisProjection(order.getScheduleId(), seatPositions, userId);
-
-        // ★ 释放排队入场名额（用户已完成锁座+支付，名额让给排队者）
-        queueService.leave(order.getScheduleId(), userId);
+        // 8. 数据库真正提交后再更新可重建的 Redis 投影。
+        // Waiting Room 名额已经由锁座建单事务唯一负责释放，支付不再重复 leave。
+        transactionCallbacks.afterCommit(
+                () -> updateRedisProjection(order.getScheduleId(), seatPositions, userId));
 
         log.info("[Payment] Order paid: orderNo={}, userId={}, total={}, pointsAfter={}",
                 orderNo, userId, order.getTotalPrice(), user.getPoints() - pointsCost);
@@ -205,15 +213,10 @@ public class PaymentService {
         int closed = orderMapper.closePendingOrder(order.getOrderNo(), now);
         if (closed == 0) return;
 
-        // ★ 先释放 Redis 锁，防止座位被幽灵锁定
-        releaseRedisLocksForOrder(order);
+        List<LockSeatsDTO.SeatPos> positions = loadSeatPositions(order.getOrderNo());
 
         scheduleMapper.rollbackStock(order.getScheduleId(), order.getSeatCount());
         seatLockMapper.releaseOrderLocks(order.getOrderNo());
-        invalidateRenderCache(order.getScheduleId());
-
-        // ★ 释放排队入场名额
-        queueService.leave(order.getScheduleId(), order.getUserId());
 
         // outbox event
         Map<String, Object> eventPayload = new LinkedHashMap<>();
@@ -224,28 +227,27 @@ public class PaymentService {
         eventPayload.put("timestamp", System.currentTimeMillis());
         outboxService.writeEvent("ORDER_CANCELLED", eventPayload);
 
+        transactionCallbacks.afterCommit(() -> {
+            if (!positions.isEmpty()) {
+                lockScriptService.releaseSeats(
+                        order.getScheduleId(), positions, order.getUserId());
+            }
+            invalidateRenderCache(order.getScheduleId());
+            queueService.leave(order.getScheduleId(), order.getUserId());
+        });
+
         log.info("[Payment] Expired order closed: orderNo={}", order.getOrderNo());
     }
 
-    /**
-     * 释放订单关联的 Redis 座位锁（best-effort）
-     */
-    private void releaseRedisLocksForOrder(OrderPO order) {
-        try {
-            List<SeatLockPO> locks = seatLockMapper.selectLocksByOrderNo(order.getOrderNo());
-            if (locks != null && !locks.isEmpty()) {
-                List<LockSeatsDTO.SeatPos> positions = locks.stream().map(lock -> {
-                    LockSeatsDTO.SeatPos pos = new LockSeatsDTO.SeatPos();
-                    pos.setRow(lock.getRowNum());
-                    pos.setCol(lock.getColNum());
-                    return pos;
-                }).toList();
-                lockScriptService.releaseSeats(order.getScheduleId(), positions, order.getUserId());
-                log.info("[Payment] Released {} Redis locks for orderNo={}", positions.size(), order.getOrderNo());
-            }
-        } catch (Exception e) {
-            log.error("[Payment] Failed to release Redis locks for orderNo={}", order.getOrderNo(), e);
-        }
+    private List<LockSeatsDTO.SeatPos> loadSeatPositions(String orderNo) {
+        List<SeatLockPO> locks = seatLockMapper.selectLocksByOrderNo(orderNo);
+        if (locks == null) return List.of();
+        return locks.stream().map(lock -> {
+            LockSeatsDTO.SeatPos pos = new LockSeatsDTO.SeatPos();
+            pos.setRow(lock.getRowNum());
+            pos.setCol(lock.getColNum());
+            return pos;
+        }).toList();
     }
 
     private void invalidateRenderCache(Long scheduleId) {

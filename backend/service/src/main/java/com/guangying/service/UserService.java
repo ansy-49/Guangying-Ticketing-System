@@ -11,6 +11,7 @@ import com.guangying.domain.model.dto.UserLoginDTO;
 import com.guangying.domain.model.dto.UserRegisterDTO;
 import com.guangying.domain.model.po.UserPO;
 import com.guangying.domain.model.vo.UserVO;
+import com.guangying.service.auth.LoginValidationChain;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,9 @@ public class UserService {
 
     @Resource
     private JwtUtil jwtUtil;
+
+    @Resource
+    private LoginValidationChain loginValidationChain;
 
     /**
      * 细粒度注册锁 — 按账号维度加锁
@@ -94,16 +98,9 @@ public class UserService {
      * 用户登录
      */
     public UserVO login(UserLoginDTO dto) {
-        log.info("用户登录: account={}", dto.getAccount());
+        log.info("用户登录: account={}", dto == null ? null : dto.getAccount());
 
-        UserPO user = findByAccount(dto.getAccount().trim());
-        if (user == null) {
-            throw new BizException(ResponseCodeEnum.NOT_FOUND, "账号不存在");
-        }
-
-        if (!PasswordUtil.matches(dto.getPassword(), user.getPassword())) {
-            throw new BizException(ResponseCodeEnum.BAD_REQUEST, "密码错误");
-        }
+        UserPO user = loginValidationChain.authenticate(dto);
 
         log.info("用户登录成功: id={}", user.getId());
         return toVO(user, true);
