@@ -114,6 +114,7 @@ export interface SeatLayoutData {
 }
 
 export interface LockSeatsRequest {
+  idempotencyKey: string
   scheduleId: number
   seats: { row: number; col: number }[]
 }

@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.guangying.common.constants.MQConstants;
 import com.guangying.dao.mapper.ProcessedEventMapper;
 import com.guangying.domain.model.po.ProcessedEventPO;
+import com.guangying.service.mq.handler.OrderEventHandler;
 import com.guangying.service.mq.handler.OrderEventHandlerRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.ConsumeMode;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,34 +57,33 @@ public class OrderEventConsumer implements RocketMQListener<String> {
             String orderNo = (String) event.get("orderNo");
             String eventId = (String) event.get("eventId");
 
-            if (orderNo == null) {
-                log.warn("[OrderConsumer] Missing orderNo, skip");
-                return;
+            if (type == null || type.isBlank() || orderNo == null || orderNo.isBlank()) {
+                throw new IllegalArgumentException("Order event is missing type or orderNo");
             }
             if (eventId == null || eventId.isBlank()) {
                 // 兼容升级前产生的消息，同一订单同一事件类型仍保持稳定幂等键。
                 eventId = type + ":" + orderNo;
             }
-            if (processedEventMapper.selectById(eventId) != null) {
-                log.debug("[OrderConsumer] Duplicate event skipped: eventId={}", eventId);
-                return;
-            }
+            OrderEventHandler handler = handlerRegistry.find(type)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Unknown order event type: " + type));
 
             log.info("[OrderConsumer] Received: eventId={}, type={}, orderNo={}",
                     eventId, type, orderNo);
 
-            handlerRegistry.find(type)
-                    .ifPresentOrElse(
-                            handler -> handler.handle(event),
-                            () -> log.debug("[OrderConsumer] Unknown type: {}", type)
-                    );
-
             ProcessedEventPO processed = new ProcessedEventPO();
             processed.setEventId(eventId);
-            processed.setEventType(type == null ? "UNKNOWN" : type);
+            processed.setEventType(type);
             processed.setOrderNo(orderNo);
             processed.setProcessedTime(LocalDateTime.now());
-            processedEventMapper.insert(processed);
+            try {
+                processedEventMapper.insert(processed);
+            } catch (DuplicateKeyException duplicate) {
+                log.debug("[OrderConsumer] Duplicate event skipped: eventId={}", eventId);
+                return;
+            }
+
+            handler.handle(event);
         } catch (Exception e) {
             log.error("[OrderConsumer] Failed to process message", e);
             throw new RuntimeException("Order event processing failed, trigger retry", e);

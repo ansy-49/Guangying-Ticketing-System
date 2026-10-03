@@ -29,6 +29,12 @@ public class OrderPO extends BaseEntity {
     /** 用户ID */
     private Long userId;
 
+    /** 建单幂等键，同一用户下唯一 */
+    private String idempotencyKey;
+
+    /** 场次与座位集合的稳定摘要，用于识别幂等键误复用 */
+    private String requestFingerprint;
+
     /** 场次ID */
     private Long scheduleId;
 

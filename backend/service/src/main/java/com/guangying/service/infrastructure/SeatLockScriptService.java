@@ -21,7 +21,7 @@ import java.util.List;
  *   TTL:  900 秒（15 分钟）
  *
  *   连座锁定: 一次 Lua 调用操作多个 Key
- *   同人幂等: owner == userId → 放行刷新 TTL（防抖/重试不拒）
+ *   同人幂等: owner == userId → 返回 ALREADY_OWNED，由业务层返回原订单
  * </pre>
  */
 @Slf4j
@@ -42,19 +42,28 @@ public class SeatLockScriptService {
      * ARGV[1] = userId
      * ARGV[2] = TTL 秒
      *
-     * 返回: 1=全部锁定成功; 0=有座位被他人占用
+     * 返回: 1=本次新锁定成功; 2=至少一个座位已由本人持有; 0=被他人占用
      * </pre>
      */
     private static final String LOCK_SEATS_LUA = """
             local user_id = ARGV[1]
             local ttl = tonumber(ARGV[2])
+            local owned_by_user = false
 
-            -- 第一阶段：预检 —— 每个座位要么空闲，要么已被本人持有（幂等）
+            -- 第一阶段：预检。本人已持有时不刷新、不补锁，交给业务层返回原订单，
+            -- 避免重试请求再次建单并在回滚补偿时释放第一次请求的锁。
             for i = 1, #KEYS do
                 local owner = redis.call('GET', KEYS[i])
                 if owner and owner ~= user_id then
                     return 0   -- 被他人锁定，原子拒绝
                 end
+                if owner == user_id then
+                    owned_by_user = true
+                end
+            end
+
+            if owned_by_user then
+                return 2
             end
 
             -- 第二阶段：提交 —— 批量写锁，带独立 TTL
@@ -96,7 +105,8 @@ public class SeatLockScriptService {
      * <pre>
      * KEYS   = 各座位锁 key
      * ARGV[1] = userId
-     * ARGV[2] = soldSetKey (seat:sold:{scheduleId})
+     * KEYS[seatCount + 1] = soldSetKey (seat:sold:{scheduleId})
+     * ARGV[2] = seatCount
      * ARGV[3...] = seat members (row_col)
      *
      * 返回: 成功释放的座位数
@@ -104,10 +114,11 @@ public class SeatLockScriptService {
      */
     private static final String RELEASE_LOCKS_AND_MARK_SOLD_LUA = """
             local user_id = ARGV[1]
-            local sold_key = ARGV[2]
+            local seat_count = tonumber(ARGV[2])
+            local sold_key = KEYS[seat_count + 1]
             local released = 0
 
-            for i = 1, #KEYS do
+            for i = 1, seat_count do
                 local owner = redis.call('GET', KEYS[i])
                 if owner == user_id then
                     redis.call('DEL', KEYS[i])
@@ -130,12 +141,12 @@ public class SeatLockScriptService {
     /**
      * 原子锁定多个座位
      *
-     * @return true=全部锁定成功, false=至少一个被他人占用
+     * @return 本次锁座结果；Redis Bean 缺失时由 MySQL 兜底，运行期 Redis 故障则安全拒绝
      */
-    public boolean lockSeats(Long scheduleId, List<LockSeatsDTO.SeatPos> seats, Long userId) {
+    public LockResult lockSeats(Long scheduleId, List<LockSeatsDTO.SeatPos> seats, Long userId) {
         if (stringRedisTemplate == null) {
             log.debug("[SeatLock] Redis unavailable, fallback to DB-only locking");
-            return true; // Redis 不可用 → DB 唯一索引兜底
+            return LockResult.ACQUIRED; // 本地/H2 模式没有 Redis Bean，由 DB 唯一索引兜底
         }
 
         List<String> keys = new ArrayList<>();
@@ -149,24 +160,32 @@ public class SeatLockScriptService {
                     String.valueOf(userId),
                     String.valueOf(LOCK_TTL_SECONDS)
             );
-            boolean success = result != null && result == 1L;
+            LockResult lockResult = result == null
+                    ? LockResult.UNAVAILABLE
+                    : LockResult.fromCode(result.intValue());
 
-            if (success) {
+            if (lockResult == LockResult.ACQUIRED) {
                 // 维护辅助 Set（渲染加速，非权威）
-                String lockedSetKey = CacheConstants.SEAT_LOCKED_SET_PREFIX + scheduleId;
+                String lockedSetKey = CacheConstants.scheduleKey(
+                        CacheConstants.SEAT_LOCKED_SET_PREFIX, scheduleId);
                 for (LockSeatsDTO.SeatPos seat : seats) {
                     String member = seat.getRow() + "_" + seat.getCol();
                     stringRedisTemplate.opsForSet().add(lockedSetKey, member);
                 }
                 log.info("[SeatLock] Lua locked {} seats: scheduleId={}, userId={}", seats.size(), scheduleId, userId);
+            } else if (lockResult == LockResult.ALREADY_OWNED) {
+                log.info("[SeatLock] Idempotent retry detected: scheduleId={}, userId={}",
+                        scheduleId, userId);
             } else {
-                log.info("[SeatLock] Lua lock rejected (occupied by others): scheduleId={}, userId={}", scheduleId, userId);
+                log.info("[SeatLock] Lua lock rejected: result={}, scheduleId={}, userId={}",
+                        lockResult, scheduleId, userId);
             }
 
-            return success;
+            return lockResult;
         } catch (Exception e) {
-            log.error("[SeatLock] Lua lock error, fallback to DB: scheduleId={}, userId={}", scheduleId, userId, e);
-            return true; // Redis 故障时放行，DB 唯一索引兜底
+            log.error("[SeatLock] Lua lock error, fail closed: scheduleId={}, userId={}",
+                    scheduleId, userId, e);
+            return LockResult.UNAVAILABLE;
         }
     }
 
@@ -190,7 +209,8 @@ public class SeatLockScriptService {
             int count = released != null ? released.intValue() : 0;
 
             // 清理辅助 Set
-            String lockedSetKey = CacheConstants.SEAT_LOCKED_SET_PREFIX + scheduleId;
+            String lockedSetKey = CacheConstants.scheduleKey(
+                    CacheConstants.SEAT_LOCKED_SET_PREFIX, scheduleId);
             for (LockSeatsDTO.SeatPos seat : seats) {
                 String member = seat.getRow() + "_" + seat.getCol();
                 stringRedisTemplate.opsForSet().remove(lockedSetKey, member);
@@ -219,16 +239,18 @@ public class SeatLockScriptService {
             members.add(seat.getRow() + "_" + seat.getCol());
         }
 
-        String soldKey = CacheConstants.SEAT_SOLD_SET_PREFIX + scheduleId;
+        String soldKey = CacheConstants.scheduleKey(CacheConstants.SEAT_SOLD_SET_PREFIX, scheduleId);
+        keys.add(soldKey);
         List<String> args = new ArrayList<>();
         args.add(String.valueOf(userId));
-        args.add(soldKey);
+        args.add(String.valueOf(seats.size()));
         args.addAll(members);
 
         try {
             stringRedisTemplate.execute(releaseAndMarkSoldScript, keys, args.toArray());
             // 清理 locked 辅助 Set
-            String lockedSetKey = CacheConstants.SEAT_LOCKED_SET_PREFIX + scheduleId;
+            String lockedSetKey = CacheConstants.scheduleKey(
+                    CacheConstants.SEAT_LOCKED_SET_PREFIX, scheduleId);
             for (String member : members) {
                 stringRedisTemplate.opsForSet().remove(lockedSetKey, member);
             }
@@ -253,10 +275,33 @@ public class SeatLockScriptService {
     // =================== Key 构建 ===================
 
     public static String buildSeatLockKey(Long scheduleId, int row, int col) {
-        return CacheConstants.SEAT_LOCK_KEY_PREFIX + scheduleId + ":" + row + "_" + col;
+        return CacheConstants.scheduleKey(CacheConstants.SEAT_LOCK_KEY_PREFIX, scheduleId)
+                + ":" + row + "_" + col;
     }
 
     public static String buildLockTokenKey(String lockToken) {
         return CacheConstants.SEAT_LOCK_TOKEN_PREFIX + lockToken;
+    }
+
+    public enum LockResult {
+        CONFLICT(0),
+        ACQUIRED(1),
+        ALREADY_OWNED(2),
+        UNAVAILABLE(-1);
+
+        private final int code;
+
+        LockResult(int code) {
+            this.code = code;
+        }
+
+        private static LockResult fromCode(int code) {
+            for (LockResult result : values()) {
+                if (result.code == code) {
+                    return result;
+                }
+            }
+            return UNAVAILABLE;
+        }
     }
 }

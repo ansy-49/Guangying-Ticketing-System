@@ -1,6 +1,8 @@
 package com.guangying.service.infrastructure;
 
 import com.guangying.common.constants.CacheConstants;
+import com.guangying.domain.enums.ResponseCodeEnum;
+import com.guangying.domain.exception.BizException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -168,7 +170,8 @@ public class QueueService {
         if (maxAdmission <= 0) throw new IllegalArgumentException("maxAdmission must be positive");
         try {
             stringRedisTemplate.opsForValue().set(
-                    CacheConstants.QUEUE_MAX_PREFIX + scheduleId, String.valueOf(maxAdmission));
+                    queueKey(CacheConstants.QUEUE_MAX_PREFIX, scheduleId),
+                    String.valueOf(maxAdmission));
             stringRedisTemplate.opsForValue().set(buildHotKey(scheduleId), "1", 24, TimeUnit.HOURS);
             stringRedisTemplate.opsForSet().add(
                     CacheConstants.QUEUE_HOT_SCHEDULES_KEY, String.valueOf(scheduleId));
@@ -180,10 +183,13 @@ public class QueueService {
     }
 
     public QueueEnterResult enter(Long scheduleId, Long userId) {
-        if (!isHotSchedule(scheduleId) || stringRedisTemplate == null) {
+        if (stringRedisTemplate == null) {
             return QueueEnterResult.allowed();
         }
         try {
+            if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(buildHotKey(scheduleId)))) {
+                return QueueEnterResult.allowed();
+            }
             List<Object> result = stringRedisTemplate.execute(
                     enterScript, enterKeys(scheduleId, userId),
                     String.valueOf(userId),
@@ -198,8 +204,11 @@ public class QueueService {
             }
         } catch (Exception e) {
             log.error("[Queue] Enter failed: scheduleId={}, userId={}", scheduleId, userId, e);
+            throw new BizException(ResponseCodeEnum.INTERNAL_ERROR.getCode(),
+                    "排队服务暂时不可用，请稍后重试");
         }
-        return QueueEnterResult.allowed();
+        throw new BizException(ResponseCodeEnum.INTERNAL_ERROR.getCode(),
+                "排队服务未返回有效结果，请稍后重试");
     }
 
     /** 幂等离场：只有成功删除租约时才会释放容量并推进下一位。 */
@@ -209,10 +218,10 @@ public class QueueService {
             List<Object> result = stringRedisTemplate.execute(
                     leaveScript,
                     Arrays.asList(
-                            CacheConstants.QUEUE_ADMISSION_PREFIX + scheduleId,
-                            CacheConstants.QUEUE_MAX_PREFIX + scheduleId,
-                            CacheConstants.QUEUE_WAITING_PREFIX + scheduleId,
-                            CacheConstants.QUEUE_LEASE_PREFIX + scheduleId,
+                            queueKey(CacheConstants.QUEUE_ADMISSION_PREFIX, scheduleId),
+                            queueKey(CacheConstants.QUEUE_MAX_PREFIX, scheduleId),
+                            queueKey(CacheConstants.QUEUE_WAITING_PREFIX, scheduleId),
+                            queueKey(CacheConstants.QUEUE_LEASE_PREFIX, scheduleId),
                             buildTokenKey(scheduleId, userId)),
                     String.valueOf(userId),
                     String.valueOf(CacheConstants.QUEUE_TOKEN_TTL_SECONDS),
@@ -260,10 +269,10 @@ public class QueueService {
         List<Object> result = stringRedisTemplate.execute(
                 reapScript,
                 Arrays.asList(
-                        CacheConstants.QUEUE_ADMISSION_PREFIX + scheduleId,
-                        CacheConstants.QUEUE_MAX_PREFIX + scheduleId,
-                        CacheConstants.QUEUE_WAITING_PREFIX + scheduleId,
-                        CacheConstants.QUEUE_LEASE_PREFIX + scheduleId),
+                        queueKey(CacheConstants.QUEUE_ADMISSION_PREFIX, scheduleId),
+                        queueKey(CacheConstants.QUEUE_MAX_PREFIX, scheduleId),
+                        queueKey(CacheConstants.QUEUE_WAITING_PREFIX, scheduleId),
+                        queueKey(CacheConstants.QUEUE_LEASE_PREFIX, scheduleId)),
                 String.valueOf(CacheConstants.QUEUE_TOKEN_TTL_SECONDS),
                 String.valueOf(System.currentTimeMillis()),
                 tokenPrefix(scheduleId));
@@ -278,16 +287,19 @@ public class QueueService {
     }
 
     public QueueStatusResult status(Long scheduleId, Long userId) {
-        if (!isHotSchedule(scheduleId) || stringRedisTemplate == null) {
+        if (stringRedisTemplate == null) {
             return QueueStatusResult.allowed();
         }
         try {
+            if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(buildHotKey(scheduleId)))) {
+                return QueueStatusResult.allowed();
+            }
             reapSchedule(scheduleId);
             if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(buildTokenKey(scheduleId, userId)))) {
                 return QueueStatusResult.allowed();
             }
             Long rank = stringRedisTemplate.opsForZSet().rank(
-                    CacheConstants.QUEUE_WAITING_PREFIX + scheduleId, String.valueOf(userId));
+                    queueKey(CacheConstants.QUEUE_WAITING_PREFIX, scheduleId), String.valueOf(userId));
             if (rank != null) {
                 int position = rank.intValue() + 1;
                 return new QueueStatusResult(false, position,
@@ -295,37 +307,42 @@ public class QueueService {
             }
         } catch (Exception e) {
             log.warn("[Queue] Status check failed: scheduleId={}", scheduleId, e);
+            throw new BizException(ResponseCodeEnum.INTERNAL_ERROR.getCode(),
+                    "排队状态暂时不可用，请稍后重试");
         }
         return new QueueStatusResult(false, 999, 9999);
     }
 
     public boolean validateToken(Long scheduleId, Long userId) {
-        if (!isHotSchedule(scheduleId) || stringRedisTemplate == null) return true;
+        if (stringRedisTemplate == null) return true;
         try {
+            if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(buildHotKey(scheduleId)))) {
+                return true;
+            }
             Boolean tokenExists = stringRedisTemplate.hasKey(buildTokenKey(scheduleId, userId));
             Double lease = stringRedisTemplate.opsForZSet().score(
-                    CacheConstants.QUEUE_LEASE_PREFIX + scheduleId, String.valueOf(userId));
+                    queueKey(CacheConstants.QUEUE_LEASE_PREFIX, scheduleId), String.valueOf(userId));
             return Boolean.TRUE.equals(tokenExists)
                     && lease != null
                     && lease > System.currentTimeMillis();
         } catch (Exception e) {
             log.warn("[Queue] Token validation failed: scheduleId={}, userId={}",
                     scheduleId, userId, e);
-            return true;
+            return false;
         }
     }
 
     private List<String> enterKeys(Long scheduleId, Long userId) {
         return Arrays.asList(
-                CacheConstants.QUEUE_ADMISSION_PREFIX + scheduleId,
-                CacheConstants.QUEUE_MAX_PREFIX + scheduleId,
+                queueKey(CacheConstants.QUEUE_ADMISSION_PREFIX, scheduleId),
+                queueKey(CacheConstants.QUEUE_MAX_PREFIX, scheduleId),
                 buildTokenKey(scheduleId, userId),
-                CacheConstants.QUEUE_WAITING_PREFIX + scheduleId,
-                CacheConstants.QUEUE_LEASE_PREFIX + scheduleId);
+                queueKey(CacheConstants.QUEUE_WAITING_PREFIX, scheduleId),
+                queueKey(CacheConstants.QUEUE_LEASE_PREFIX, scheduleId));
     }
 
     private String buildHotKey(Long scheduleId) {
-        return CacheConstants.SCHEDULE_HOT_KEY + ":" + scheduleId;
+        return CacheConstants.scheduleKey(CacheConstants.SCHEDULE_HOT_KEY + ":", scheduleId);
     }
 
     private String buildTokenKey(Long scheduleId, Long userId) {
@@ -333,7 +350,11 @@ public class QueueService {
     }
 
     private String tokenPrefix(Long scheduleId) {
-        return CacheConstants.QUEUE_TOKEN_PREFIX + scheduleId + ":";
+        return queueKey(CacheConstants.QUEUE_TOKEN_PREFIX, scheduleId) + ":";
+    }
+
+    private String queueKey(String prefix, Long scheduleId) {
+        return CacheConstants.scheduleKey(prefix, scheduleId);
     }
 
     public record QueueEnterResult(boolean admitted, int position, int estimatedWaitSeconds) {

@@ -22,6 +22,23 @@ public interface OrderMapper extends BaseMapper<OrderPO> {
     @Select("SELECT * FROM ticket_order WHERE status = 0 AND expire_time <= #{now} AND deleted = 0 LIMIT #{limit}")
     List<OrderPO> selectExpiredPendingOrders(@Param("now") LocalDateTime now, @Param("limit") int limit);
 
+    @Select("""
+            SELECT * FROM ticket_order
+            WHERE user_id = #{userId} AND schedule_id = #{scheduleId}
+              AND status = 0 AND deleted = 0
+            ORDER BY create_time DESC
+            """)
+    List<OrderPO> selectPendingByUserAndSchedule(@Param("userId") Long userId,
+                                                  @Param("scheduleId") Long scheduleId);
+
+    @Select("""
+            SELECT * FROM ticket_order
+            WHERE user_id = #{userId} AND idempotency_key = #{idempotencyKey} AND deleted = 0
+            LIMIT 1
+            """)
+    OrderPO selectByUserAndIdempotencyKey(@Param("userId") Long userId,
+                                           @Param("idempotencyKey") String idempotencyKey);
+
     @Update("UPDATE ticket_order SET status = 2, cancel_time = #{now}, update_time = CURRENT_TIMESTAMP WHERE order_no = #{orderNo} AND status = 0 AND deleted = 0")
     int closePendingOrder(@Param("orderNo") String orderNo, @Param("now") LocalDateTime now);
 

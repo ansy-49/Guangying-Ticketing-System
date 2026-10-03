@@ -9,6 +9,21 @@ public final class CacheConstants {
 
     private CacheConstants() {}
 
+    /**
+     * 将同一场次的 Redis Key 固定到同一个 Cluster hash slot。
+     *
+     * <p>所有参与同一段 Lua 脚本的 Key 都包含相同的 {@code {scheduleId}}
+     * hash tag，避免从单机 Redis 切换到 Redis Cluster 后出现 CROSSSLOT。</p>
+     */
+    public static String scheduleKey(String prefix, Long scheduleId) {
+        return prefix + "{" + scheduleId + "}";
+    }
+
+    /** 将同一电影的想看计数与去重集合固定到同一个 Redis Cluster slot。 */
+    public static String movieKey(String prefix, Long movieId) {
+        return prefix + "{" + movieId + "}";
+    }
+
     // =================== L1 / L2 缓存 Key ===================
 
     /** 热映电影列表缓存键 */
@@ -34,6 +49,12 @@ public final class CacheConstants {
     /** 用户想看集合: user:wish:{userId} */
     public static final String USER_WISH_PREFIX = "user:wish:";
 
+    /** 单电影想看计数 String: movie:wish:count:{movieId} */
+    public static final String MOVIE_WISH_COUNT_PREFIX = "movie:wish:count:";
+
+    /** 单电影已想看用户 Set: movie:wish:users:{movieId} */
+    public static final String MOVIE_WISH_USERS_PREFIX = "movie:wish:users:";
+
     /** 限流 Key 前缀: rate_limit:{resource}:{identifier} */
     public static final String RATE_LIMIT_PREFIX = "rate_limit:";
 
@@ -42,6 +63,9 @@ public final class CacheConstants {
 
     /** 电影详情缓存: movie:detail:{movieId} */
     public static final String MOVIE_DETAIL_PREFIX = "movie:detail:";
+
+    /** 多实例 L1 缓存失效广播频道 */
+    public static final String CACHE_INVALIDATION_CHANNEL = "cache:invalidation";
 
     // =================== 座位锁（单座 Key，目标架构核心） ===================
 

@@ -88,6 +88,26 @@ class MultiLevelCacheServiceTest {
                 eq(java.util.concurrent.TimeUnit.SECONDS));
     }
 
+    @Test
+    void pubSubInvalidationRemovesOnlyTheLocalL1Entry() {
+        RedisTemplate<String, Object> redisTemplate = mock(RedisTemplate.class);
+        ValueOperations<String, Object> valueOperations = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("movie:detail:1")).thenReturn(null);
+
+        MultiLevelCacheService cacheService = newCacheService(redisTemplate, new ExecutingLockService());
+        AtomicInteger databaseLoads = new AtomicInteger();
+        Supplier<String> loader = () -> "version-" + databaseLoads.incrementAndGet();
+
+        assertEquals("version-1", cacheService.get("movie:detail:1", loader));
+        assertEquals("version-1", cacheService.get("movie:detail:1", loader));
+
+        cacheService.onInvalidationMessage("KEY:movie:detail:1");
+
+        assertEquals("version-2", cacheService.get("movie:detail:1", loader));
+        assertEquals(2, databaseLoads.get());
+    }
+
     private MultiLevelCacheService newCacheService(
             RedisTemplate<String, Object> redisTemplate,
             DistributedLockService lockService) {

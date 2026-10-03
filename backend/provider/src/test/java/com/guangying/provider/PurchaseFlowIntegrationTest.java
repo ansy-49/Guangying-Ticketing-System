@@ -77,7 +77,7 @@ class PurchaseFlowIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"scheduleId": 1, "seats": [{"row": 2, "col": 3}]}
+                                {"idempotencyKey": "purchase-flow-1", "scheduleId": 1, "seats": [{"row": 2, "col": 3}]}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
@@ -86,6 +86,25 @@ class PurchaseFlowIntegrationTest {
                 .getContentAsString();
         JsonNode order = objectMapper.readTree(orderBody).path("data");
         String orderNo = order.path("orderNo").asText();
+
+        mockMvc.perform(post("/api/seat/lock")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"idempotencyKey": "purchase-flow-1", "scheduleId": 1, "seats": [{"row": 2, "col": 3}]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.orderNo").value(orderNo));
+
+        mockMvc.perform(post("/api/seat/lock")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"idempotencyKey": "purchase-flow-1", "scheduleId": 1, "seats": [{"row": 2, "col": 4}]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(409));
 
         mockMvc.perform(post("/api/payment/pay")
                         .header("Authorization", "Bearer " + token)

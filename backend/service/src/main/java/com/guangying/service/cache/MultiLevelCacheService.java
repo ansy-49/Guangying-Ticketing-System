@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,9 @@ public class MultiLevelCacheService {
 
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired(required = false)
+    private StringRedisTemplate stringRedisTemplate;
 
     @Autowired(required = false)
     private DistributedLockService distributedLockService;
@@ -237,8 +241,7 @@ public class MultiLevelCacheService {
      * 主动失效（写操作后调用）
      */
     public void evict(String key) {
-        l1Cache.invalidate(key);
-        l1NullCache.invalidate(key);
+        evictLocal(key);
         if (redisTemplate != null) {
             try {
                 redisTemplate.delete(key);
@@ -246,6 +249,7 @@ public class MultiLevelCacheService {
                 log.warn("[Cache] L2 evict error for key={}: {}", key, e.getMessage());
             }
         }
+        publishInvalidation("KEY:" + key);
         log.debug("[Cache] EVICTED: {}", key);
     }
 
@@ -253,12 +257,7 @@ public class MultiLevelCacheService {
      * 批量失效
      */
     public void evictByPrefix(String prefix) {
-        l1Cache.asMap().keySet().stream()
-                .filter(k -> k.startsWith(prefix))
-                .forEach(l1Cache::invalidate);
-        l1NullCache.asMap().keySet().stream()
-                .filter(k -> k.startsWith(prefix))
-                .forEach(l1NullCache::invalidate);
+        evictLocalByPrefix(prefix);
         try {
             if (redisTemplate != null) {
                 List<String> keys = redisTemplate.execute((RedisConnection connection) -> {
@@ -280,7 +279,50 @@ public class MultiLevelCacheService {
         } catch (Exception e) {
             log.warn("[Cache] L2 evict by prefix error for prefix={}: {}", prefix, e.getMessage());
         }
+        publishInvalidation("PREFIX:" + prefix);
         log.debug("[Cache] EVICTED by prefix: {}", prefix);
+    }
+
+    /** 仅清理当前 JVM 的 L1；供 Redis Pub/Sub 订阅端调用，避免再次广播。 */
+    public void evictLocal(String key) {
+        l1Cache.invalidate(key);
+        l1NullCache.invalidate(key);
+        l1LongTermCache.invalidate(key);
+    }
+
+    /** 仅按前缀清理当前 JVM 的 L1。 */
+    public void evictLocalByPrefix(String prefix) {
+        l1Cache.asMap().keySet().stream()
+                .filter(k -> k.startsWith(prefix))
+                .toList()
+                .forEach(l1Cache::invalidate);
+        l1NullCache.asMap().keySet().stream()
+                .filter(k -> k.startsWith(prefix))
+                .toList()
+                .forEach(l1NullCache::invalidate);
+        l1LongTermCache.asMap().keySet().stream()
+                .filter(k -> k.startsWith(prefix))
+                .toList()
+                .forEach(l1LongTermCache::invalidate);
+    }
+
+    public void onInvalidationMessage(String message) {
+        if (message == null) return;
+        if (message.startsWith("KEY:")) {
+            evictLocal(message.substring(4));
+        } else if (message.startsWith("PREFIX:")) {
+            evictLocalByPrefix(message.substring(7));
+        }
+    }
+
+    private void publishInvalidation(String message) {
+        if (stringRedisTemplate == null) return;
+        try {
+            stringRedisTemplate.convertAndSend(CacheConstants.CACHE_INVALIDATION_CHANNEL, message);
+        } catch (Exception e) {
+            // L2 已删除，广播失败时仍由 L1 短 TTL 限制不一致窗口。
+            log.warn("[Cache] Invalidation broadcast failed: {}", e.getMessage());
+        }
     }
 
     /** 随机偏移 0~2 分钟，防止缓存雪崩 */

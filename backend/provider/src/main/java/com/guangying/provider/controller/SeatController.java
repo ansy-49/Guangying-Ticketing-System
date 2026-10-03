@@ -64,18 +64,4 @@ public class SeatController {
         return Result.ok(orderVO);
     }
 
-    /**
-     * 释放座位锁定
-     */
-    @PostMapping("/unlock")
-    public Result<Void> unlockSeats(
-            @RequestParam Long scheduleId,
-            HttpServletRequest request) {
-        Long userId = (Long) request.getAttribute("userId");
-        if (userId == null) {
-            return Result.fail(401, "请先登录");
-        }
-        seatService.unlockSeats(userId, scheduleId);
-        return Result.ok(null);
-    }
 }

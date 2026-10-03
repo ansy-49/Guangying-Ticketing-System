@@ -18,7 +18,10 @@ import com.guangying.service.infrastructure.TransactionCallbacks;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -43,6 +46,7 @@ public class OrderService {
     private final SeatLockScriptService lockScriptService;
     private final QueueService queueService;
     private final TransactionCallbacks transactionCallbacks;
+    private final TransactionTemplate requiresNewTransaction;
 
     private static final DateTimeFormatter VO_TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -52,7 +56,8 @@ public class OrderService {
                         OutboxService outboxService,
                         SeatLockScriptService lockScriptService,
                         QueueService queueService,
-                        TransactionCallbacks transactionCallbacks) {
+                        TransactionCallbacks transactionCallbacks,
+                        PlatformTransactionManager transactionManager) {
         this.orderMapper = orderMapper;
         this.scheduleMapper = scheduleMapper;
         this.seatLockMapper = seatLockMapper;
@@ -60,6 +65,10 @@ public class OrderService {
         this.lockScriptService = lockScriptService;
         this.queueService = queueService;
         this.transactionCallbacks = transactionCallbacks;
+        this.requiresNewTransaction = new TransactionTemplate(transactionManager);
+        this.requiresNewTransaction.setPropagationBehavior(
+                TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.requiresNewTransaction.setTimeout(8);
     }
 
     /**
@@ -88,7 +97,6 @@ public class OrderService {
      * <p>正常情况延时消息已处理，这里是兜底</p>
      */
     @Scheduled(fixedDelay = 60000)
-    @Transactional(rollbackFor = Exception.class)
     public void cancelExpiredOrders() {
         LocalDateTime now = LocalDateTime.now();
         List<OrderPO> expired = orderMapper.selectExpiredPendingOrders(now, 100);
@@ -96,7 +104,8 @@ public class OrderService {
 
         for (OrderPO order : expired) {
             try {
-                closePendingOrder(order, "TIMEOUT");
+                requiresNewTransaction.executeWithoutResult(
+                        status -> closePendingOrder(order, "TIMEOUT"));
             } catch (Exception e) {
                 log.error("[Order] Failed to close expired order: orderNo={}", order.getOrderNo(), e);
             }

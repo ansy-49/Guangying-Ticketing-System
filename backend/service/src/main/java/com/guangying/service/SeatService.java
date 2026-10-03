@@ -13,17 +13,24 @@ import com.guangying.domain.model.po.*;
 import com.guangying.domain.model.vo.OrderVO;
 import com.guangying.domain.model.vo.SeatLayoutVO;
 import com.guangying.service.infrastructure.OutboxService;
+import com.guangying.service.infrastructure.DistributedLockService;
 import com.guangying.service.infrastructure.QueueService;
 import com.guangying.service.infrastructure.SeatLockScriptService;
 import com.guangying.service.infrastructure.SeatSoldService;
 import com.guangying.service.infrastructure.TransactionCallbacks;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -62,6 +69,8 @@ public class SeatService {
     private final OutboxService outboxService;
     private final QueueService queueService;
     private final TransactionCallbacks transactionCallbacks;
+    private final DistributedLockService distributedLockService;
+    private final TransactionTemplate purchaseTransaction;
 
     @Autowired(required = false)
     private StringRedisTemplate stringRedisTemplate;
@@ -81,7 +90,9 @@ public class SeatService {
                        SeatSoldService soldService,
                        OutboxService outboxService,
                        QueueService queueService,
-                       TransactionCallbacks transactionCallbacks) {
+                       TransactionCallbacks transactionCallbacks,
+                       DistributedLockService distributedLockService,
+                       PlatformTransactionManager transactionManager) {
         this.cinemaHallMapper = cinemaHallMapper;
         this.seatLockMapper = seatLockMapper;
         this.orderSeatMapper = orderSeatMapper;
@@ -94,6 +105,10 @@ public class SeatService {
         this.outboxService = outboxService;
         this.queueService = queueService;
         this.transactionCallbacks = transactionCallbacks;
+        this.distributedLockService = distributedLockService;
+        this.purchaseTransaction = new TransactionTemplate(transactionManager);
+        this.purchaseTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        this.purchaseTransaction.setTimeout(10);
     }
 
     // ============================================================
@@ -213,12 +228,71 @@ public class SeatService {
      *
      * @return 订单 VO（含 orderNo、expireTime、totalPrice 等）
      */
-    @Transactional(rollbackFor = Exception.class, timeout = 10)
     public OrderVO lockSeatsAndCreateOrder(Long userId, LockSeatsDTO dto) {
         Long scheduleId = dto.getScheduleId();
         List<LockSeatsDTO.SeatPos> seats = dto.getSeats();
         if (seats == null || seats.isEmpty()) {
             throw new BizException(ResponseCodeEnum.BAD_REQUEST.getCode(), "至少选择一个座位");
+        }
+        Set<String> requestedSeats = seats.stream()
+                .map(seat -> seat.getRow() + "_" + seat.getCol())
+                .collect(Collectors.toSet());
+        if (requestedSeats.size() != seats.size()) {
+            throw new BizException(ResponseCodeEnum.BAD_REQUEST.getCode(), "座位列表不能包含重复位置");
+        }
+
+        String fingerprint = requestFingerprint(scheduleId, requestedSeats);
+        OrderVO replay = findByIdempotencyKey(userId, dto.getIdempotencyKey(), fingerprint);
+        if (replay != null) {
+            return replay;
+        }
+
+        // 幂等键锁覆盖整个数据库事务（包括 commit），避免同一请求在多实例上并发执行。
+        // Redis/Redisson 不可用时，数据库唯一索引仍提供最终的 at-most-once 兜底。
+        OrderVO result;
+        try {
+            result = distributedLockService.executeWithBoundedLock(
+                    "order:idempotency:" + userId + ":" + dto.getIdempotencyKey(),
+                    3,
+                    15,
+                    () -> purchaseTransaction.execute(status ->
+                            lockSeatsAndCreateOrderInTransaction(userId, dto, requestedSeats, fingerprint)));
+        } catch (DataIntegrityViolationException e) {
+            // Redisson 降级或租约极端到期时，由数据库唯一索引裁决；事务回滚后重放胜者结果。
+            replay = findByIdempotencyKey(userId, dto.getIdempotencyKey(), fingerprint);
+            if (replay != null) {
+                return replay;
+            }
+            throw new BizException(ResponseCodeEnum.SEAT_LOCKED);
+        }
+        if (result != null) {
+            return result;
+        }
+
+        replay = findByIdempotencyKey(userId, dto.getIdempotencyKey(), fingerprint);
+        if (replay != null) {
+            return replay;
+        }
+        throw new BizException(ResponseCodeEnum.CONFLICT.getCode(), "相同购票请求正在处理中，请稍后重试");
+    }
+
+    private OrderVO lockSeatsAndCreateOrderInTransaction(Long userId,
+                                                          LockSeatsDTO dto,
+                                                          Set<String> requestedSeats,
+                                                          String fingerprint) {
+        Long scheduleId = dto.getScheduleId();
+        List<LockSeatsDTO.SeatPos> seats = dto.getSeats();
+
+        OrderVO replay = findByIdempotencyKey(userId, dto.getIdempotencyKey(), fingerprint);
+        if (replay != null) {
+            return replay;
+        }
+
+        OrderVO existingOrder = findExistingPendingOrder(userId, scheduleId, requestedSeats);
+        if (existingOrder != null) {
+            log.info("[Seat] Idempotent retry returned existing order: orderNo={}, userId={}",
+                    existingOrder.getOrderNo(), userId);
+            return existingOrder;
         }
 
         // ★ 热门场次准入校验：必须持有入场令牌
@@ -227,9 +301,22 @@ public class SeatService {
         }
 
         // === 第二阶段：Redis Lua 原子锁座 ===
-        boolean locked = lockScriptService.lockSeats(scheduleId, seats, userId);
-        if (!locked) {
+        SeatLockScriptService.LockResult lockResult =
+                lockScriptService.lockSeats(scheduleId, seats, userId);
+        if (lockResult == SeatLockScriptService.LockResult.CONFLICT) {
             throw new BizException(ResponseCodeEnum.SEAT_LOCKED);
+        }
+        if (lockResult == SeatLockScriptService.LockResult.UNAVAILABLE) {
+            throw new BizException(ResponseCodeEnum.INTERNAL_ERROR.getCode(),
+                    "锁座服务暂时不可用，请稍后重试");
+        }
+        if (lockResult == SeatLockScriptService.LockResult.ALREADY_OWNED) {
+            existingOrder = findExistingPendingOrder(userId, scheduleId, requestedSeats);
+            if (existingOrder != null) {
+                return existingOrder;
+            }
+            throw new BizException(ResponseCodeEnum.CONFLICT.getCode(),
+                    "该座位正在由当前账号的另一笔请求处理，请稍后查看订单");
         }
 
         // DB 提交成功后才释放 Waiting Room 名额；包括 commit-time 异常在内的回滚
@@ -242,10 +329,10 @@ public class SeatService {
                             scheduleId, userId);
                 });
 
-        return createOrderInTransaction(userId, dto);
+        return createOrderInTransaction(userId, dto, fingerprint);
     }
 
-    private OrderVO createOrderInTransaction(Long userId, LockSeatsDTO dto) {
+    private OrderVO createOrderInTransaction(Long userId, LockSeatsDTO dto, String fingerprint) {
         Long scheduleId = dto.getScheduleId();
         List<LockSeatsDTO.SeatPos> seats = dto.getSeats();
         int seatCount = seats.size();
@@ -309,6 +396,8 @@ public class SeatService {
         OrderPO order = new OrderPO();
         order.setOrderNo(orderNo);
         order.setUserId(userId);
+        order.setIdempotencyKey(dto.getIdempotencyKey());
+        order.setRequestFingerprint(fingerprint);
         order.setScheduleId(scheduleId);
         order.setLockToken(lockToken);
         order.setMovieName(movieName);
@@ -340,38 +429,50 @@ public class SeatService {
     }
 
     // ============================================================
-    //  释放座位
-    // ============================================================
-
-    /**
-     * 主动释放座位锁定（用户取消选座时调用）— 同步清理 Redis + DB
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void unlockSeats(Long userId, Long scheduleId) {
-        List<SeatLockPO> userLocks =
-                seatLockMapper.selectUserLocks(scheduleId, userId, LocalDateTime.now());
-        List<LockSeatsDTO.SeatPos> positions = userLocks == null
-                ? List.of()
-                : userLocks.stream().map(lock -> {
-                    LockSeatsDTO.SeatPos pos = new LockSeatsDTO.SeatPos();
-                    pos.setRow(lock.getRowNum());
-                    pos.setCol(lock.getColNum());
-                    return pos;
-                }).toList();
-
-        int released = seatLockMapper.releaseUserLocks(scheduleId, userId);
-        transactionCallbacks.afterCommit(() -> {
-            if (!positions.isEmpty()) {
-                lockScriptService.releaseSeats(scheduleId, positions, userId);
-            }
-            queueService.leave(scheduleId, userId);
-        });
-        log.info("[Seat] Released {} DB locks for user={}, schedule={}", released, userId, scheduleId);
-    }
-
-    // ============================================================
     //  私有方法
     // ============================================================
+
+    private OrderVO findByIdempotencyKey(Long userId, String idempotencyKey, String fingerprint) {
+        OrderPO existing = orderMapper.selectByUserAndIdempotencyKey(userId, idempotencyKey);
+        if (existing == null) {
+            return null;
+        }
+        if (!Objects.equals(existing.getRequestFingerprint(), fingerprint)) {
+            throw new BizException(ResponseCodeEnum.CONFLICT.getCode(),
+                    "幂等键已用于另一组场次或座位，请生成新的幂等键");
+        }
+        log.info("[Seat] Idempotent request replayed: orderNo={}, userId={}, key={}",
+                existing.getOrderNo(), userId, idempotencyKey);
+        return toVO(existing);
+    }
+
+    private String requestFingerprint(Long scheduleId, Set<String> requestedSeats) {
+        String canonical = scheduleId + ":" + requestedSeats.stream().sorted().collect(Collectors.joining(","));
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
+    private OrderVO findExistingPendingOrder(Long userId,
+                                             Long scheduleId,
+                                             Set<String> requestedSeats) {
+        List<OrderPO> pendingOrders = orderMapper.selectPendingByUserAndSchedule(userId, scheduleId);
+        for (OrderPO order : pendingOrders) {
+            List<SeatLockPO> locks = seatLockMapper.selectLocksByOrderNo(order.getOrderNo());
+            Set<String> orderSeats = locks.stream()
+                    .filter(lock -> Objects.equals(lock.getStatus(), 1))
+                    .map(lock -> lock.getRowNum() + "_" + lock.getColNum())
+                    .collect(Collectors.toSet());
+            if (orderSeats.equals(requestedSeats)) {
+                return toVO(order);
+            }
+        }
+        return null;
+    }
 
     private CinemaHallPO buildDefaultHall(Long cinemaId, String hallName) {
         CinemaHallPO hall = new CinemaHallPO();

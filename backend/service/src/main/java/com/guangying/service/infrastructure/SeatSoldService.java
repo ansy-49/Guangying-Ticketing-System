@@ -37,7 +37,7 @@ public class SeatSoldService {
             return;
         }
         try {
-            String key = CacheConstants.SEAT_SOLD_SET_PREFIX + scheduleId;
+            String key = CacheConstants.scheduleKey(CacheConstants.SEAT_SOLD_SET_PREFIX, scheduleId);
             stringRedisTemplate.opsForSet().add(key, seatMembers.toArray(new String[0]));
             log.info("[SeatSold] Marked {} seats as sold: scheduleId={}", seatMembers.size(), scheduleId);
         } catch (Exception e) {
@@ -53,7 +53,7 @@ public class SeatSoldService {
             return loadFromDB(scheduleId);
         }
         try {
-            String key = CacheConstants.SEAT_SOLD_SET_PREFIX + scheduleId;
+            String key = CacheConstants.scheduleKey(CacheConstants.SEAT_SOLD_SET_PREFIX, scheduleId);
             Set<String> sold = stringRedisTemplate.opsForSet().members(key);
             if (sold == null || sold.isEmpty()) {
                 // 缓存为空，从 DB 重建
@@ -73,7 +73,7 @@ public class SeatSoldService {
         Set<String> sold = loadFromDB(scheduleId);
         if (stringRedisTemplate != null && !sold.isEmpty()) {
             try {
-                String key = CacheConstants.SEAT_SOLD_SET_PREFIX + scheduleId;
+                String key = CacheConstants.scheduleKey(CacheConstants.SEAT_SOLD_SET_PREFIX, scheduleId);
                 stringRedisTemplate.delete(key); // 先清再建
                 stringRedisTemplate.opsForSet().add(key, sold.toArray(new String[0]));
                 log.info("[SeatSold] Rebuilt sold projection: scheduleId={}, count={}", scheduleId, sold.size());

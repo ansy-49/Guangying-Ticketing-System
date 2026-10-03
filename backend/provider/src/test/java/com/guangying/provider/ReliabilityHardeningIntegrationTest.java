@@ -102,6 +102,8 @@ class ReliabilityHardeningIntegrationTest {
         OrderPO order = new OrderPO();
         order.setOrderNo(orderNo);
         order.setUserId(9_999L);
+        order.setIdempotencyKey("reliability-" + UUID.randomUUID());
+        order.setRequestFingerprint("test-fixture");
         order.setScheduleId(1L);
         order.setSeatCount(1);
         order.setStatus(OrderStatusEnum.PENDING.getCode());

@@ -123,10 +123,6 @@ const api = {
   lockSeats: (data: LockSeatsRequest) =>
     authInstance.post('/seat/lock', data).then((res) => res.data),
 
-  /** 释放座位 */
-  unlockSeats: (params: { scheduleId: number }) =>
-    authInstance.post('/seat/unlock', null, { params }).then((res) => res.data),
-
   // ==================== 订单相关 ====================
 
   /** 取消订单 */

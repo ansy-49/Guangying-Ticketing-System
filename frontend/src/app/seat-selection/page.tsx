@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Monitor, Coins } from 'lucide-react'
 import { toast } from 'sonner'
@@ -24,6 +24,7 @@ function SeatSelectionContent() {
   const [selectedSeats, setSelectedSeats] = useState<SeatInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [locking, setLocking] = useState(false)
+  const pendingIdempotencyKey = useRef<string | null>(null)
 
   // 排队状态
   const [queueAdmitted, setQueueAdmitted] = useState(false)
@@ -145,6 +146,7 @@ function SeatSelectionContent() {
     try {
       // 锁座 + 建单（一个请求完成，直接返回 orderNo）
       const lockRes = await api.lockSeats({
+        idempotencyKey: pendingIdempotencyKey.current ??= crypto.randomUUID(),
         scheduleId: Number(scheduleId),
         seats: selectedSeats.map(s => ({ row: s.row, col: s.col })),
       })
@@ -163,6 +165,7 @@ function SeatSelectionContent() {
       }
 
       toast.success('锁座成功，请在15分钟内完成支付')
+      pendingIdempotencyKey.current = null
 
       // 直接跳转支付页
       router.push(`/payment?orderNo=${orderNo}`)

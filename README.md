@@ -8,8 +8,9 @@
 
 - **选座下单链路**：座位图查询、同步锁座、创建待支付订单、支付成功后写入最终售出座位。
 - **三层防超卖**：Redis Lua 原子锁座、MySQL 条件原子扣减、座位唯一索引兜底。
+- **严格建单幂等**：客户端复用幂等键，Redisson 锁覆盖事务提交，MySQL `(user_id, idempotency_key)` 唯一索引最终兜底；请求指纹阻止同一键误用于不同场次或座位。
 - **高并发保护**：AOP 令牌桶限流、热门场次排队令牌、座位锁自动过期与失败补偿。
-- **缓存体系**：L1 Caffeine + L2 Redis 多级缓存；短 TTL 空值缓存拦截不存在 ID，热点 Key 回源使用 Redisson 看门狗锁与双重检查，并以随机 TTL 缓解集中失效。
+- **缓存体系**：L1 Caffeine + L2 Redis 多级缓存；短 TTL 空值缓存拦截不存在 ID，热点 Key 回源使用 Redisson 看门狗锁与双重检查，随机 TTL 缓解集中失效，Redis Pub/Sub 广播多实例 L1 失效。
 - **异步能力**：RocketMQ 承载订单领域事件，配合 Transactional Outbox、重试和消费幂等实现最终一致性。
 - **可扩展设计**：限流采用策略/注册表模式，订单事件采用命令/注册表模式；登录使用责任链拆分校验步骤，请求通过 Context、日志、JWT 三级拦截链统一处理。
 - **工程化部署**：支持本地 H2 快速启动，也支持 Docker Compose 启动 MySQL、Redis、RocketMQ、后端、前端、Nginx。
@@ -90,6 +91,9 @@ http://localhost:3000
 
 Docker 模式会启动 MySQL、Redis、RocketMQ、后端、前端、Nginx。
 
+如果复用的是早于“建单幂等键”版本创建的 MySQL 数据卷，请先备份数据库并执行
+`docker/mysql/migrations/20261003_add_order_idempotency.sql`；全新数据卷会由初始化脚本直接创建最新表结构，无需执行迁移。
+
 ### 1. 准备环境变量
 
 ```powershell
@@ -139,23 +143,41 @@ http://localhost
 
 - 使用 Lua 一次性校验并锁定多个 `seat:lock:{scheduleId}:{row}_{col}` 座位 Key。
 - 使用 `seat_lock(schedule_id, row_num, col_num)` 唯一索引兜底。
-- Redis 不可用时降级到数据库唯一索引保证正确性。
+- 同一用户重试相同座位组合时直接返回原待支付订单；Lua 返回“本人已持有”时禁止重复建单，避免回滚误释放旧锁。
+- 运行期 Redis 异常时锁座链路默认 fail-closed；仅无 Redis Bean 的本地演示模式使用数据库唯一索引兜底。
+- 同一场次的座位锁、已售投影和 Waiting Room Key 统一使用 `{scheduleId}` Hash Tag，兼容 Redis Cluster 多 Key Lua。
 - Redis 锁座成功后在同一数据库事务内扣减库存、写入座位锁和待支付订单。
 
 ### 下单防超卖
 
+- 前端为一次购票意图生成幂等键，网络重试复用原值；服务端保存 SHA-256 请求指纹，幂等键与请求内容不一致时直接拒绝。
+- Redisson 按“用户 + 幂等键”串行化同一请求并覆盖数据库 commit；Redis 降级或锁租约极端到期时，MySQL 唯一索引仍保证最多生成一笔订单。
 - MySQL 使用带 `available_seats >= seatCount` 条件的单条 UPDATE 原子校验并扣减库存。
 - `movie_schedule.version` 随每次库存变更递增，用于审计库存变更次数，不参与拒绝无关座位订单。
 - 创建待支付订单后，`seat_lock` 绑定 `order_no`。
+- 不提供脱离订单的独立解锁接口；座位释放统一由订单取消事务完成状态迁移、库存归还和 Outbox 落库。
+- 超时扫描只负责发现订单，每个订单使用独立 `REQUIRES_NEW` 事务关闭，单笔失败不影响整批。
 - 订单超时或取消时回滚数据库库存并释放 Redis 座位锁。
+
+### 消息可靠性
+
+- 消费端先通过 `processed_event.event_id` 唯一键原子抢占，再在同一事务内执行处理器；处理失败时幂等记录一起回滚。
+- 未知事件类型不会被误标记为已处理，而是抛出异常交给 RocketMQ 重试与死信机制。
 
 ### 缓存一致性
 
 - 场次列表：L1 Caffeine -> L2 Redis -> Redisson Key 级重建锁 -> 二次检查 -> DB。
 - 电影详情不存在时写入 60 秒空值标记，避免恶意或重复无效 ID 持续穿透至数据库。
 - 只有获得重建锁的实例能够回源；锁等待超时或 Redisson 异常时复查缓存，仍为空则降级访问 DB，优先保证可用性。
+- 写操作采用 Cache Aside 删除 L2 后，通过 Redis Pub/Sub 广播失效消息，各实例只清理自己的 Caffeine；广播异常时由 L1 的 60 秒 TTL 兜底收敛。
 - 已售座位在 Redis 中维护加速投影，数据库订单与座位表作为最终数据源。
 - 交易链路不依赖展示缓存，下单时重新执行 Redis Lua 锁座与数据库条件扣减。
+
+### 想看计数
+
+- 想看用户集合与计数 Key 使用相同 `{movieId}` Hash Tag，由 Lua 原子完成用户去重、数据库基线初始化和计数递增，兼容 Redis Cluster。
+- RocketMQ 重复投递时先由 `user_wish(user_id, movie_id)` 唯一索引判重，只有首次插入成功才更新电影计数，避免至少一次投递造成重复累加。
+- 数据库写回成功后统一删除电影详情、热映、待映和最受期待缓存，并广播 L1 失效。
 
 ## 常用命令
 
