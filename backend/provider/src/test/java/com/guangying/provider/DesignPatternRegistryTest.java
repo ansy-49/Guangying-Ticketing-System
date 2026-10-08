@@ -1,6 +1,9 @@
 package com.guangying.provider;
 
+import com.guangying.common.annotation.RateLimit;
 import com.guangying.common.enums.RateLimitAlgorithm;
+import com.guangying.common.enums.RateLimitDimension;
+import com.guangying.provider.controller.SeatController;
 import com.guangying.service.mq.handler.OrderEventHandler;
 import com.guangying.service.mq.handler.OrderEventHandlerRegistry;
 import com.guangying.service.ratelimit.RateLimitContext;
@@ -10,8 +13,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -37,6 +42,23 @@ class DesignPatternRegistryTest {
                         strategy(RateLimitAlgorithm.SLIDING_WINDOW),
                         strategy(RateLimitAlgorithm.SLIDING_WINDOW)
                 )));
+    }
+
+    @Test
+    void lockEndpointDeclaresCallerResourceAndGlobalLimits() {
+        RateLimit[] rules = Arrays.stream(SeatController.class.getDeclaredMethods())
+                .filter(method -> method.getName().equals("lockSeats"))
+                .findFirst()
+                .orElseThrow()
+                .getAnnotationsByType(RateLimit.class);
+
+        assertEquals(3, rules.length);
+        assertEquals(List.of(
+                        RateLimitDimension.CALLER,
+                        RateLimitDimension.RESOURCE,
+                        RateLimitDimension.GLOBAL),
+                Arrays.stream(rules).map(RateLimit::dimension).toList());
+        assertEquals("#dto.scheduleId", rules[1].dimensionKey());
     }
 
     @Test

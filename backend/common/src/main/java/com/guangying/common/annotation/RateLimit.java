@@ -1,6 +1,7 @@
 package com.guangying.common.annotation;
 
 import com.guangying.common.enums.RateLimitAlgorithm;
+import com.guangying.common.enums.RateLimitDimension;
 
 import java.lang.annotation.*;
 
@@ -25,6 +26,7 @@ import java.lang.annotation.*;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
+@Repeatable(RateLimits.class)
 public @interface RateLimit {
 
     /** 限流资源标识 */
@@ -32,6 +34,15 @@ public @interface RateLimit {
 
     /** 限流算法（默认滑动窗口） */
     RateLimitAlgorithm algorithm() default RateLimitAlgorithm.SLIDING_WINDOW;
+
+    /** 限流维度：请求者、业务资源或应用全局。 */
+    RateLimitDimension dimension() default RateLimitDimension.CALLER;
+
+    /**
+     * RESOURCE 维度的 Spring EL，例如 {@code #dto.scheduleId} 或 {@code #scheduleId}。
+     * 其他维度无需填写。
+     */
+    String dimensionKey() default "";
 
     // =================== 滑动窗口参数 ===================
 

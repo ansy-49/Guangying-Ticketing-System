@@ -1,0 +1,1868 @@
+{
+  "runId": "muf40rfuv64c",
+  "timestamp": "2026-09-24T05:47:17.133Z",
+  "config": {
+    "baseUrl": "http://localhost:18081",
+    "users": 100,
+    "setupConcurrency": 8,
+    "sameSeatScheduleId": 35,
+    "distinctSeatScheduleId": 36,
+    "timeoutMs": 15000
+  },
+  "setupDurationMs": 2127.94,
+  "scenarios": [
+    {
+      "name": "same-seat contention",
+      "requests": 100,
+      "expectedSuccesses": 1,
+      "successes": 1,
+      "uniqueOrders": 1,
+      "oversold": 0,
+      "successRate": 1,
+      "wallTimeMs": 279.5,
+      "throughputRps": 357.78,
+      "latencyMs": {
+        "min": 227.32,
+        "avg": 248.72,
+        "p50": 247.56,
+        "p95": 269.49,
+        "p99": 272.28,
+        "max": 273.85
+      },
+      "responseCodes": {
+        "200": 1,
+        "462": 99
+      },
+      "responses": [
+        {
+          "account": "lt_muf40rfuv64c_000",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 240.42509999999993
+        },
+        {
+          "account": "lt_muf40rfuv64c_001",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 239.57510000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_002",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 235.35860000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_003",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 248.11300000000028
+        },
+        {
+          "account": "lt_muf40rfuv64c_004",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 234.55299999999988
+        },
+        {
+          "account": "lt_muf40rfuv64c_005",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 265.5156000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_006",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 241.51400000000012
+        },
+        {
+          "account": "lt_muf40rfuv64c_007",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 269.3188
+        },
+        {
+          "account": "lt_muf40rfuv64c_008",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 240.59799999999996
+        },
+        {
+          "account": "lt_muf40rfuv64c_009",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 235.64900000000034
+        },
+        {
+          "account": "lt_muf40rfuv64c_010",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 252.45829999999978
+        },
+        {
+          "account": "lt_muf40rfuv64c_011",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 269.7361999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_012",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 232.7220000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_013",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 247.98480000000018
+        },
+        {
+          "account": "lt_muf40rfuv64c_014",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 263.4432999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_015",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 230.4767999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_016",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 263.0407
+        },
+        {
+          "account": "lt_muf40rfuv64c_017",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 269.1405
+        },
+        {
+          "account": "lt_muf40rfuv64c_018",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 260.70550000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_019",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 241.12670000000026
+        },
+        {
+          "account": "lt_muf40rfuv64c_020",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 272.2837999999997
+        },
+        {
+          "account": "lt_muf40rfuv64c_021",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 248.39829999999984
+        },
+        {
+          "account": "lt_muf40rfuv64c_022",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 240.4652000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_023",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 234.0971999999997
+        },
+        {
+          "account": "lt_muf40rfuv64c_024",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 247.94299999999976
+        },
+        {
+          "account": "lt_muf40rfuv64c_025",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 239.40239999999994
+        },
+        {
+          "account": "lt_muf40rfuv64c_026",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 254.39499999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_027",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 245.0618000000004
+        },
+        {
+          "account": "lt_muf40rfuv64c_028",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 239.8108000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_029",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 239.3977
+        },
+        {
+          "account": "lt_muf40rfuv64c_030",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 265.9788000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_031",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 269.4913999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_032",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 251.72029999999995
+        },
+        {
+          "account": "lt_muf40rfuv64c_033",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 237.42270000000008
+        },
+        {
+          "account": "lt_muf40rfuv64c_034",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 243.95340000000033
+        },
+        {
+          "account": "lt_muf40rfuv64c_035",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 229.7800000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_036",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 242.92189999999982
+        },
+        {
+          "account": "lt_muf40rfuv64c_037",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 230.2784999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_038",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 258.9210000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_039",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 239.0350000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_040",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 232.04210000000012
+        },
+        {
+          "account": "lt_muf40rfuv64c_041",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 269.4839000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_042",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 236.1551999999997
+        },
+        {
+          "account": "lt_muf40rfuv64c_043",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 252.95640000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_044",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 246.66399999999976
+        },
+        {
+          "account": "lt_muf40rfuv64c_045",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 247.5594000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_046",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 258.1936999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_047",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 231.20640000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_048",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 237.13670000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_049",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 252.97699999999986
+        },
+        {
+          "account": "lt_muf40rfuv64c_050",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 232.99450000000024
+        },
+        {
+          "account": "lt_muf40rfuv64c_051",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 271.4180000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_052",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 260.12469999999985
+        },
+        {
+          "account": "lt_muf40rfuv64c_053",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 267.5133000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_054",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 245.68949999999995
+        },
+        {
+          "account": "lt_muf40rfuv64c_055",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 270.97490000000016
+        },
+        {
+          "account": "lt_muf40rfuv64c_056",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 258.0133999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_057",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 250.57769999999982
+        },
+        {
+          "account": "lt_muf40rfuv64c_058",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 243.46339999999964
+        },
+        {
+          "account": "lt_muf40rfuv64c_059",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 232.64069999999992
+        },
+        {
+          "account": "lt_muf40rfuv64c_060",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 233.1248999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_061",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 243.66440000000011
+        },
+        {
+          "account": "lt_muf40rfuv64c_062",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 267.80290000000014
+        },
+        {
+          "account": "lt_muf40rfuv64c_063",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 238.3125
+        },
+        {
+          "account": "lt_muf40rfuv64c_064",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 234.86749999999984
+        },
+        {
+          "account": "lt_muf40rfuv64c_065",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 235.0227
+        },
+        {
+          "account": "lt_muf40rfuv64c_066",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 251.95589999999993
+        },
+        {
+          "account": "lt_muf40rfuv64c_067",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 266.8267999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_068",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 235.42640000000029
+        },
+        {
+          "account": "lt_muf40rfuv64c_069",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 250.8991000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_070",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 266.98889999999983
+        },
+        {
+          "account": "lt_muf40rfuv64c_071",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 259.5985999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_072",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 257.3257999999996
+        },
+        {
+          "account": "lt_muf40rfuv64c_073",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 266.9512
+        },
+        {
+          "account": "lt_muf40rfuv64c_074",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 233.7217999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_075",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 264.5495000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_076",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 269.33479999999963
+        },
+        {
+          "account": "lt_muf40rfuv64c_077",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 230.79230000000007
+        },
+        {
+          "account": "lt_muf40rfuv64c_078",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 249.9097999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_079",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 240.7715000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_080",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 266.39270000000033
+        },
+        {
+          "account": "lt_muf40rfuv64c_081",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 254.13320000000022
+        },
+        {
+          "account": "lt_muf40rfuv64c_082",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 235.4996000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_083",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 231.72260000000006
+        },
+        {
+          "account": "lt_muf40rfuv64c_084",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 250.91719999999987
+        },
+        {
+          "account": "lt_muf40rfuv64c_085",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 266.51890000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_086",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 232.82540000000017
+        },
+        {
+          "account": "lt_muf40rfuv64c_087",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 251.88850000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_088",
+          "seat": "1_2",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413470900891A5CBA",
+          "durationMs": 273.8474000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_089",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 249.6597999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_090",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 257.8345999999997
+        },
+        {
+          "account": "lt_muf40rfuv64c_091",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 258.1764000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_092",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 231.0032000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_093",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 227.3172000000004
+        },
+        {
+          "account": "lt_muf40rfuv64c_094",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 242.28740000000016
+        },
+        {
+          "account": "lt_muf40rfuv64c_095",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 234.5933
+        },
+        {
+          "account": "lt_muf40rfuv64c_096",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 265.09640000000036
+        },
+        {
+          "account": "lt_muf40rfuv64c_097",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 231.82729999999992
+        },
+        {
+          "account": "lt_muf40rfuv64c_098",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 246.97800000000007
+        },
+        {
+          "account": "lt_muf40rfuv64c_099",
+          "seat": "1_2",
+          "status": 200,
+          "code": 462,
+          "message": "所选座位已被他人锁定",
+          "orderNo": null,
+          "durationMs": 256.08219999999983
+        }
+      ]
+    },
+    {
+      "name": "distinct-seat throughput",
+      "requests": 100,
+      "expectedSuccesses": 100,
+      "successes": 100,
+      "uniqueOrders": 100,
+      "oversold": 0,
+      "successRate": 100,
+      "wallTimeMs": 1037.15,
+      "throughputRps": 96.42,
+      "latencyMs": {
+        "min": 66.4,
+        "avg": 565.01,
+        "p50": 566.32,
+        "p95": 983.11,
+        "p99": 1024.99,
+        "max": 1033.88
+      },
+      "responseCodes": {
+        "200": 100
+      },
+      "responses": [
+        {
+          "account": "lt_muf40rfuv64c_000",
+          "seat": "1_1",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000018C48D9",
+          "durationMs": 301.5414999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_001",
+          "seat": "1_2",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000067A8DF9",
+          "durationMs": 512.7428
+        },
+        {
+          "account": "lt_muf40rfuv64c_002",
+          "seat": "1_3",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100004704CF3",
+          "durationMs": 350.9816999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_003",
+          "seat": "1_4",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413470900025639B9",
+          "durationMs": 66.39809999999989
+        },
+        {
+          "account": "lt_muf40rfuv64c_004",
+          "seat": "1_5",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347090008BDD9DE",
+          "durationMs": 79.47560000000021
+        },
+        {
+          "account": "lt_muf40rfuv64c_005",
+          "seat": "1_6",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100003D35C49",
+          "durationMs": 425.8887
+        },
+        {
+          "account": "lt_muf40rfuv64c_006",
+          "seat": "1_7",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000079F4E71",
+          "durationMs": 262.9812999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_007",
+          "seat": "1_8",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100005E907EA",
+          "durationMs": 281.8212000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_008",
+          "seat": "1_9",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000146510EE",
+          "durationMs": 398.43370000000004
+        },
+        {
+          "account": "lt_muf40rfuv64c_009",
+          "seat": "1_10",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413470900137A796E",
+          "durationMs": 126.31989999999996
+        },
+        {
+          "account": "lt_muf40rfuv64c_010",
+          "seat": "1_11",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710001160DA34",
+          "durationMs": 407.116
+        },
+        {
+          "account": "lt_muf40rfuv64c_011",
+          "seat": "1_12",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100009F516BE",
+          "durationMs": 319.88899999999967
+        },
+        {
+          "account": "lt_muf40rfuv64c_012",
+          "seat": "1_13",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000160CCC97",
+          "durationMs": 291.59760000000006
+        },
+        {
+          "account": "lt_muf40rfuv64c_013",
+          "seat": "1_14",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000157B787B",
+          "durationMs": 474.2233000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_014",
+          "seat": "2_1",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000105844CB",
+          "durationMs": 332.56100000000015
+        },
+        {
+          "account": "lt_muf40rfuv64c_015",
+          "seat": "2_2",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100012CB182E",
+          "durationMs": 253.038
+        },
+        {
+          "account": "lt_muf40rfuv64c_016",
+          "seat": "2_3",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100019A0372E",
+          "durationMs": 416.3274999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_017",
+          "seat": "2_4",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000176BE072",
+          "durationMs": 379.8746000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_018",
+          "seat": "2_5",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710002166A14A",
+          "durationMs": 215.8391999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_019",
+          "seat": "2_6",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100018CE484A",
+          "durationMs": 192.0987
+        },
+        {
+          "account": "lt_muf40rfuv64c_020",
+          "seat": "2_7",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413470900203197F2",
+          "durationMs": 104.6905999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_021",
+          "seat": "2_8",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100022EA3673",
+          "durationMs": 370.34400000000005
+        },
+        {
+          "account": "lt_muf40rfuv64c_022",
+          "seat": "2_9",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100023C3664F",
+          "durationMs": 239.1954999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_023",
+          "seat": "2_10",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000249FFABF",
+          "durationMs": 271.97580000000016
+        },
+        {
+          "account": "lt_muf40rfuv64c_024",
+          "seat": "2_11",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347090025508241",
+          "durationMs": 137.67869999999994
+        },
+        {
+          "account": "lt_muf40rfuv64c_025",
+          "seat": "2_12",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000263F82B6",
+          "durationMs": 538.8826000000004
+        },
+        {
+          "account": "lt_muf40rfuv64c_026",
+          "seat": "2_13",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000287142D5",
+          "durationMs": 227.09159999999974
+        },
+        {
+          "account": "lt_muf40rfuv64c_027",
+          "seat": "2_14",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000277E67F9",
+          "durationMs": 359.5897
+        },
+        {
+          "account": "lt_muf40rfuv64c_028",
+          "seat": "3_1",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100029DA7AC6",
+          "durationMs": 310.0403000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_029",
+          "seat": "3_2",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100030A62A25",
+          "durationMs": 494.9503999999997
+        },
+        {
+          "account": "lt_muf40rfuv64c_030",
+          "seat": "3_3",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000325CB6D8",
+          "durationMs": 444.9002999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_031",
+          "seat": "3_4",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710003147318C",
+          "durationMs": 575.4274
+        },
+        {
+          "account": "lt_muf40rfuv64c_032",
+          "seat": "3_5",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347090033E9B930",
+          "durationMs": 160.81950000000006
+        },
+        {
+          "account": "lt_muf40rfuv64c_033",
+          "seat": "3_6",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100035743AD1",
+          "durationMs": 482.42830000000004
+        },
+        {
+          "account": "lt_muf40rfuv64c_034",
+          "seat": "3_7",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100036AA6C56",
+          "durationMs": 434.5064000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_035",
+          "seat": "3_8",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710003416DED3",
+          "durationMs": 463.9684000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_036",
+          "seat": "3_9",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100037990B67",
+          "durationMs": 203.3487
+        },
+        {
+          "account": "lt_muf40rfuv64c_037",
+          "seat": "3_10",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710003873C9B5",
+          "durationMs": 181.05069999999978
+        },
+        {
+          "account": "lt_muf40rfuv64c_038",
+          "seat": "3_11",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100039BB0201",
+          "durationMs": 566.3211000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_039",
+          "seat": "3_12",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100040FCD201",
+          "durationMs": 455.10120000000006
+        },
+        {
+          "account": "lt_muf40rfuv64c_040",
+          "seat": "3_13",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100042544480",
+          "durationMs": 694.0902000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_041",
+          "seat": "3_14",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000414494D8",
+          "durationMs": 585.3032000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_042",
+          "seat": "4_1",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100043C5CB97",
+          "durationMs": 620.1075000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_043",
+          "seat": "4_2",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710004414D142",
+          "durationMs": 502.87710000000015
+        },
+        {
+          "account": "lt_muf40rfuv64c_044",
+          "seat": "4_3",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710004540D759",
+          "durationMs": 387.70960000000014
+        },
+        {
+          "account": "lt_muf40rfuv64c_045",
+          "seat": "4_4",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710004697236F",
+          "durationMs": 340.0586000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_046",
+          "seat": "4_5",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347090047CCC35D",
+          "durationMs": 91.59010000000035
+        },
+        {
+          "account": "lt_muf40rfuv64c_047",
+          "seat": "4_6",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347090048502079",
+          "durationMs": 148.92440000000033
+        },
+        {
+          "account": "lt_muf40rfuv64c_048",
+          "seat": "4_7",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134709005082BCC4",
+          "durationMs": 170.18769999999995
+        },
+        {
+          "account": "lt_muf40rfuv64c_049",
+          "seat": "4_8",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347090049C66309",
+          "durationMs": 114.96050000000014
+        },
+        {
+          "account": "lt_muf40rfuv64c_050",
+          "seat": "4_9",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100051DBB063",
+          "durationMs": 556.9834000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_051",
+          "seat": "4_10",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710005224F537",
+          "durationMs": 519.9301999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_052",
+          "seat": "4_11",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100053B0F105",
+          "durationMs": 528.4393999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_053",
+          "seat": "4_12",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100054B42948",
+          "durationMs": 547.1347999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_054",
+          "seat": "4_13",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710005589FBAA",
+          "durationMs": 712.4022
+        },
+        {
+          "account": "lt_muf40rfuv64c_055",
+          "seat": "4_14",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100056837EEE",
+          "durationMs": 610.5313999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_056",
+          "seat": "5_1",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100057A2BC6F",
+          "durationMs": 701.9025000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_057",
+          "seat": "5_2",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100058C8F994",
+          "durationMs": 662.3912
+        },
+        {
+          "account": "lt_muf40rfuv64c_058",
+          "seat": "5_3",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100059377B0B",
+          "durationMs": 683.9236999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_059",
+          "seat": "5_4",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000603D4702",
+          "durationMs": 644.2045000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_060",
+          "seat": "5_5",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100062DA5E5F",
+          "durationMs": 592.9525000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_061",
+          "seat": "5_6",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000610CF4F8",
+          "durationMs": 673.7408
+        },
+        {
+          "account": "lt_muf40rfuv64c_062",
+          "seat": "5_7",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710006382BCA1",
+          "durationMs": 813.0789999999997
+        },
+        {
+          "account": "lt_muf40rfuv64c_063",
+          "seat": "5_8",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100064DEE2EC",
+          "durationMs": 730.3734000000004
+        },
+        {
+          "account": "lt_muf40rfuv64c_064",
+          "seat": "5_9",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100065A67B02",
+          "durationMs": 721.4953
+        },
+        {
+          "account": "lt_muf40rfuv64c_065",
+          "seat": "5_10",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100066E2FCCB",
+          "durationMs": 974.5589
+        },
+        {
+          "account": "lt_muf40rfuv64c_066",
+          "seat": "5_11",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000671762F8",
+          "durationMs": 795.1756
+        },
+        {
+          "account": "lt_muf40rfuv64c_067",
+          "seat": "5_12",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000686DD04E",
+          "durationMs": 879.7795000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_068",
+          "seat": "5_13",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100069166D5E",
+          "durationMs": 868.7303000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_069",
+          "seat": "5_14",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000703C930F",
+          "durationMs": 948.5408000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_070",
+          "seat": "6_1",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100071C24AF0",
+          "durationMs": 601.0805
+        },
+        {
+          "account": "lt_muf40rfuv64c_071",
+          "seat": "6_2",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000721B33AE",
+          "durationMs": 761.3884999999996
+        },
+        {
+          "account": "lt_muf40rfuv64c_072",
+          "seat": "6_3",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100073A53E1F",
+          "durationMs": 931.2289999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_073",
+          "seat": "6_4",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100074963522",
+          "durationMs": 803.5812000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_074",
+          "seat": "6_5",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100075EE5B35",
+          "durationMs": 821.634
+        },
+        {
+          "account": "lt_muf40rfuv64c_075",
+          "seat": "6_6",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100076573803",
+          "durationMs": 858.4967000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_076",
+          "seat": "6_7",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100077D2ADB8",
+          "durationMs": 921.8838000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_077",
+          "seat": "6_8",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100078D5C51E",
+          "durationMs": 956.8175000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_078",
+          "seat": "6_9",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710007908CF73",
+          "durationMs": 1004.5984000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_079",
+          "seat": "6_10",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100080406EE7",
+          "durationMs": 1015.5089000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_080",
+          "seat": "6_11",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100081EC72E7",
+          "durationMs": 1024.9892999999997
+        },
+        {
+          "account": "lt_muf40rfuv64c_081",
+          "seat": "6_12",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710008284BF99",
+          "durationMs": 769.6852000000003
+        },
+        {
+          "account": "lt_muf40rfuv64c_082",
+          "seat": "6_13",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000831ED36B",
+          "durationMs": 786.1217000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_083",
+          "seat": "6_14",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100084B6F905",
+          "durationMs": 831.0803000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_084",
+          "seat": "7_1",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710008572FD8C",
+          "durationMs": 939.1226000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_085",
+          "seat": "7_2",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000868EE1B2",
+          "durationMs": 964.9598000000001
+        },
+        {
+          "account": "lt_muf40rfuv64c_086",
+          "seat": "7_3",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100087E7AA3C",
+          "durationMs": 739.6882999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_087",
+          "seat": "7_4",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100088BFE729",
+          "durationMs": 1033.8799000000004
+        },
+        {
+          "account": "lt_muf40rfuv64c_088",
+          "seat": "7_5",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100089A16A33",
+          "durationMs": 992.7621000000004
+        },
+        {
+          "account": "lt_muf40rfuv64c_089",
+          "seat": "7_6",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100090FF9BE4",
+          "durationMs": 635.3742000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_090",
+          "seat": "7_7",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100091737287",
+          "durationMs": 848.4378999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_091",
+          "seat": "7_8",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000926C480B",
+          "durationMs": 839.0273000000002
+        },
+        {
+          "account": "lt_muf40rfuv64c_092",
+          "seat": "7_9",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000937D621C",
+          "durationMs": 897.3550999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_093",
+          "seat": "7_10",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000946C1FE8",
+          "durationMs": 888.0587999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_094",
+          "seat": "7_11",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710009570BC43",
+          "durationMs": 776.9708999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_095",
+          "seat": "7_12",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100096C7526C",
+          "durationMs": 750.5546999999997
+        },
+        {
+          "account": "lt_muf40rfuv64c_096",
+          "seat": "7_13",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100097AA1A22",
+          "durationMs": 983.1091999999999
+        },
+        {
+          "account": "lt_muf40rfuv64c_097",
+          "seat": "7_14",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO2026092413471000989A966B",
+          "durationMs": 911.4047
+        },
+        {
+          "account": "lt_muf40rfuv64c_098",
+          "seat": "8_1",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO202609241347100099B157DE",
+          "durationMs": 651.4063999999998
+        },
+        {
+          "account": "lt_muf40rfuv64c_099",
+          "seat": "8_2",
+          "status": 200,
+          "code": 200,
+          "message": "操作成功",
+          "orderNo": "MO20260924134710010040FBB3",
+          "durationMs": 626.8615999999997
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "sameSeatStatus": 2,
+    "distinctLockedCount": 100
+  }
+}

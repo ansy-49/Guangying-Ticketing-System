@@ -1,6 +1,7 @@
 package com.guangying.service.aspect;
 
 import com.guangying.common.annotation.RateLimit;
+import com.guangying.common.enums.RateLimitDimension;
 import com.guangying.domain.exception.BizException;
 import com.guangying.domain.enums.ResponseCodeEnum;
 import com.guangying.service.ratelimit.RateLimitContext;
@@ -12,6 +13,11 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.context.expression.MethodBasedEvaluationContext;
+import org.springframework.core.DefaultParameterNameDiscoverer;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -34,32 +40,67 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 public class RateLimitAspect {
 
     private final RateLimitStrategyRegistry strategyRegistry;
+    private final ExpressionParser expressionParser = new SpelExpressionParser();
+    private final DefaultParameterNameDiscoverer parameterNameDiscoverer =
+            new DefaultParameterNameDiscoverer();
 
-    @Around("@annotation(rateLimit)")
-    public Object around(ProceedingJoinPoint pjp, RateLimit rateLimit) throws Throwable {
-        String key = rateLimit.key();
-        if (key.isEmpty()) {
-            MethodSignature sig = (MethodSignature) pjp.getSignature();
-            key = sig.getDeclaringType().getSimpleName() + ":" + sig.getName();
-        }
+    /** 仅当应用只允许可信反向代理访问时才读取代理转发头。 */
+    @Value("${guangying.rate-limit.trust-proxy-headers:false}")
+    private boolean trustProxyHeaders;
 
-        String identifier = getClientIdentifier();
+    @Around("@annotation(com.guangying.common.annotation.RateLimit) || "
+            + "@annotation(com.guangying.common.annotation.RateLimits)")
+    public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        MethodSignature signature = (MethodSignature) pjp.getSignature();
+        RateLimit[] rules = signature.getMethod().getAnnotationsByType(RateLimit.class);
 
-        RateLimitContext context = new RateLimitContext(
-                key,
-                identifier,
-                rateLimit.maxRequests(),
-                rateLimit.windowSeconds(),
-                rateLimit.capacity(),
-                rateLimit.refillRate()
-        );
-        boolean allowed = strategyRegistry.resolve(rateLimit.algorithm()).isAllowed(context);
+        for (RateLimit rule : rules) {
+            String key = rule.key();
+            if (key.isEmpty()) {
+                key = signature.getDeclaringType().getSimpleName() + ":" + signature.getName();
+            }
 
-        if (!allowed) {
-            throw new BizException(ResponseCodeEnum.RATE_LIMITED);
+            String identifier = resolveIdentifier(pjp, signature, rule);
+            RateLimitContext context = new RateLimitContext(
+                    key,
+                    identifier,
+                    rule.maxRequests(),
+                    rule.windowSeconds(),
+                    rule.capacity(),
+                    rule.refillRate()
+            );
+            boolean allowed = strategyRegistry.resolve(rule.algorithm()).isAllowed(context);
+            if (!allowed) {
+                log.warn("[RateLimit] Rejected resource={}, dimension={}, identifier={}",
+                        key, rule.dimension(), identifier);
+                throw new BizException(ResponseCodeEnum.RATE_LIMITED);
+            }
         }
 
         return pjp.proceed();
+    }
+
+    private String resolveIdentifier(ProceedingJoinPoint pjp,
+                                     MethodSignature signature,
+                                     RateLimit rule) {
+        if (rule.dimension() == RateLimitDimension.GLOBAL) {
+            return "global";
+        }
+        if (rule.dimension() == RateLimitDimension.CALLER) {
+            return getClientIdentifier();
+        }
+        if (rule.dimensionKey().isBlank()) {
+            throw new IllegalStateException("RESOURCE rate limit requires dimensionKey");
+        }
+
+        MethodBasedEvaluationContext context = new MethodBasedEvaluationContext(
+                pjp.getTarget(), signature.getMethod(), pjp.getArgs(), parameterNameDiscoverer);
+        Object value = expressionParser.parseExpression(rule.dimensionKey()).getValue(context);
+        if (value == null) {
+            throw new IllegalStateException("Rate-limit dimensionKey resolved to null: "
+                    + rule.dimensionKey());
+        }
+        return "resource:" + value;
     }
 
     private String getClientIdentifier() {
@@ -73,8 +114,13 @@ public class RateLimitAspect {
                     return "user:" + userId;
                 }
                 // 降级到 IP
-                String ip = request.getHeader("X-Real-IP");
-                if (ip == null) ip = request.getHeader("X-Forwarded-For");
+                String ip = null;
+                if (trustProxyHeaders) {
+                    ip = firstForwardedAddress(request.getHeader("X-Real-IP"));
+                    if (ip == null) {
+                        ip = firstForwardedAddress(request.getHeader("X-Forwarded-For"));
+                    }
+                }
                 if (ip == null) ip = request.getRemoteAddr();
                 return "ip:" + ip;
             }
@@ -82,5 +128,11 @@ public class RateLimitAspect {
             log.warn("Failed to get client identifier", e);
         }
         return "unknown";
+    }
+
+    private String firstForwardedAddress(String value) {
+        if (value == null || value.isBlank()) return null;
+        String first = value.split(",", 2)[0].trim();
+        return first.isEmpty() || "unknown".equalsIgnoreCase(first) ? null : first;
     }
 }

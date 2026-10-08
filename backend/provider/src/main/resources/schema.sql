@@ -1,5 +1,5 @@
 -- =====================================================
--- 光影票务后端 - 数据库表结构 (H2 MySQL 兼容模式)
+-- 光影后端 - 数据库表结构 (H2 MySQL 兼容模式)
 -- =====================================================
 
 -- 电影表
@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS sys_user (
     user_nick      VARCHAR(100),
     user_head_img  VARCHAR(500),
     points         INT DEFAULT 0        COMMENT '用户积分(1积分=1元)',
+    role           VARCHAR(20) NOT NULL DEFAULT 'USER' COMMENT '角色：USER/ADMIN',
     create_time    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     update_time    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted        INT DEFAULT 0
@@ -167,6 +168,7 @@ CREATE TABLE IF NOT EXISTS ticket_order (
     expire_time     TIMESTAMP     NULL          COMMENT '支付截止时间',
     pay_time        TIMESTAMP     NULL          COMMENT '支付时间',
     cancel_time     TIMESTAMP     NULL          COMMENT '取消时间',
+    cancel_reason   VARCHAR(32)   NULL          COMMENT '取消原因',
     create_time     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
     update_time     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
     deleted         INT           DEFAULT 0
@@ -235,6 +237,7 @@ CREATE INDEX IF NOT EXISTS idx_schedule_movie ON movie_schedule(movie_id, show_d
 CREATE INDEX IF NOT EXISTS idx_schedule_cinema ON movie_schedule(cinema_id, show_date, deleted);
 CREATE INDEX IF NOT EXISTS idx_order_user   ON ticket_order(user_id, status, deleted);
 CREATE INDEX IF NOT EXISTS idx_order_no     ON ticket_order(order_no);
+CREATE INDEX IF NOT EXISTS idx_order_expire ON ticket_order(status, deleted, expire_time, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_order_idempotency ON ticket_order(user_id, idempotency_key);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_wish_unique ON user_wish(user_id, movie_id);
 CREATE INDEX IF NOT EXISTS idx_hall_cinema ON cinema_hall(cinema_id, deleted);
@@ -253,7 +256,7 @@ CREATE INDEX IF NOT EXISTS idx_movie_year ON movie(release_year, movie_status, d
 CREATE TABLE IF NOT EXISTS outbox_event (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
     event_id     VARCHAR(64)   NOT NULL UNIQUE COMMENT '全局事件ID/消费幂等键',
-    event_type   VARCHAR(64)   NOT NULL COMMENT 'ORDER_CREATED/ORDER_PAID/ORDER_CANCELLED/ORDER_TIMEOUT',
+    event_type   VARCHAR(64)   NOT NULL COMMENT 'ORDER_CREATED/ORDER_PAID/ORDER_CANCELLED',
     payload      TEXT          NOT NULL COMMENT 'JSON 载荷',
     status       VARCHAR(16)   NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/PROCESSING/SENT/DEAD',
     create_time  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
@@ -263,7 +266,9 @@ CREATE TABLE IF NOT EXISTS outbox_event (
     claimed_until TIMESTAMP    NULL,
     last_error   VARCHAR(1000) NULL,
     retries      INT           DEFAULT 0,
-    INDEX idx_outbox_status_create (status, create_time)
+    INDEX idx_outbox_status_create (status, create_time),
+    INDEX idx_outbox_retry (status, next_retry_time),
+    INDEX idx_outbox_claim (status, claimed_until)
 );
 
 CREATE TABLE IF NOT EXISTS processed_event (

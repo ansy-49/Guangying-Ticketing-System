@@ -1,5 +1,6 @@
 package com.guangying.provider.controller;
 
+import com.guangying.common.annotation.RateLimit;
 import com.guangying.domain.model.dto.UserLoginDTO;
 import com.guangying.domain.model.dto.UserRegisterDTO;
 import com.guangying.domain.model.vo.Result;
@@ -35,6 +36,7 @@ public class AuthController {
      * 用户注册
      */
     @PostMapping("/register")
+    @RateLimit(key = "auth:register", maxRequests = 20, windowSeconds = 3600)
     public Result<UserVO> register(@Validated @RequestBody UserRegisterDTO dto) {
         UserVO user = userService.register(dto);
         return Result.success(user);
@@ -44,6 +46,7 @@ public class AuthController {
      * 用户登录
      */
     @PostMapping("/login")
+    @RateLimit(key = "auth:login", maxRequests = 60, windowSeconds = 60)
     public Result<UserVO> login(@Validated @RequestBody UserLoginDTO dto) {
         UserVO user = userService.login(dto);
         return Result.success(user);

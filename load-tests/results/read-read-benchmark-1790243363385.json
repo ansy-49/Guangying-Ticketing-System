@@ -1,0 +1,22 @@
+{
+  "label": "read-benchmark",
+  "time": "2026-09-24T09:49:23.383Z",
+  "url": "http://localhost:18082/ajax/movieOnInfoList",
+  "requests": 3000,
+  "concurrency": 100,
+  "warmup": 100,
+  "successes": 3000,
+  "successRate": 100,
+  "wallTimeMs": 1214.42,
+  "throughputRps": 2470.32,
+  "latencyMs": {
+    "avg": 40.01,
+    "p50": 37.18,
+    "p95": 69.34,
+    "p99": 93.38,
+    "max": 103.09
+  },
+  "responseCodes": {
+    "200": 3000
+  }
+}

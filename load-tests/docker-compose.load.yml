@@ -79,6 +79,23 @@ services:
     networks:
       - loadtest-net
 
+  rocketmq-init:
+    image: apache/rocketmq:5.1.4
+    container_name: guangying-loadtest-rocketmq-init
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        until sh mqadmin clusterList -n rocketmq-namesrv:9876 2>/dev/null
+        | grep -q LoadTestCluster; do sleep 2; done;
+        sh mqadmin updateTopic -n rocketmq-namesrv:9876 -c LoadTestCluster
+        -t guangying_order_timeout -a +message.type=DELAY
+    depends_on:
+      rocketmq-broker:
+        condition: service_started
+    networks:
+      - loadtest-net
+
   backend:
     build:
       context: ../backend
@@ -101,8 +118,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      rocketmq-broker:
-        condition: service_started
+      rocketmq-init:
+        condition: service_completed_successfully
     networks:
       - loadtest-net
 

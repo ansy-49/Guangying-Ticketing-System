@@ -19,8 +19,11 @@ public interface OrderMapper extends BaseMapper<OrderPO> {
      */
     List<OrderPO> selectByUserIdWithPage(@Param("userId") Long userId, @Param("offset") int offset, @Param("limit") int limit);
 
-    @Select("SELECT * FROM ticket_order WHERE status = 0 AND expire_time <= #{now} AND deleted = 0 LIMIT #{limit}")
+    @Select("SELECT * FROM ticket_order WHERE status = 0 AND expire_time <= #{now} AND deleted = 0 ORDER BY expire_time ASC, id ASC LIMIT #{limit}")
     List<OrderPO> selectExpiredPendingOrders(@Param("now") LocalDateTime now, @Param("limit") int limit);
+
+    @Select("SELECT * FROM ticket_order WHERE order_no = #{orderNo} AND deleted = 0 LIMIT 1")
+    OrderPO selectByOrderNo(@Param("orderNo") String orderNo);
 
     @Select("""
             SELECT * FROM ticket_order
@@ -39,8 +42,10 @@ public interface OrderMapper extends BaseMapper<OrderPO> {
     OrderPO selectByUserAndIdempotencyKey(@Param("userId") Long userId,
                                            @Param("idempotencyKey") String idempotencyKey);
 
-    @Update("UPDATE ticket_order SET status = 2, cancel_time = #{now}, update_time = CURRENT_TIMESTAMP WHERE order_no = #{orderNo} AND status = 0 AND deleted = 0")
-    int closePendingOrder(@Param("orderNo") String orderNo, @Param("now") LocalDateTime now);
+    @Update("UPDATE ticket_order SET status = 2, cancel_time = #{now}, cancel_reason = #{reason}, update_time = CURRENT_TIMESTAMP WHERE order_no = #{orderNo} AND status = 0 AND deleted = 0")
+    int closePendingOrder(@Param("orderNo") String orderNo,
+                          @Param("now") LocalDateTime now,
+                          @Param("reason") String reason);
 
     @Update("UPDATE ticket_order SET status = 1, pay_time = #{now}, update_time = CURRENT_TIMESTAMP WHERE order_no = #{orderNo} AND status = 0 AND deleted = 0")
     int markOrderPaid(@Param("orderNo") String orderNo, @Param("now") LocalDateTime now);

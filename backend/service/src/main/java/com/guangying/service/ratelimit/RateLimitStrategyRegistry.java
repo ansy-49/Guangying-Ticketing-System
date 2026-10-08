@@ -8,7 +8,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 策略注册表：自动发现限流策略，按算法路由并拒绝重复注册。
+ * 限流策略注册表。
+ *
+ * <p>组合了策略模式与注册表模式：Spring 自动发现策略，注册表负责路由和重复校验。</p>
  */
 @Component
 public class RateLimitStrategyRegistry {

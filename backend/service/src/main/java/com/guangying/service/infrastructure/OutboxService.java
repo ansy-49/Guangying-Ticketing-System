@@ -1,6 +1,7 @@
 package com.guangying.service.infrastructure;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.guangying.common.constants.MQConstants;
 import com.guangying.dao.mapper.OutboxEventMapper;
@@ -100,9 +101,7 @@ public class OutboxService {
                 continue;
             }
             try {
-                String topic = resolveTopic(event.getEventType());
-                String tag = event.getEventType();
-                rocketMQTemplate.syncSend(topic + ":" + tag, event.getPayload(), 1000);
+                sendToBroker(event);
                 outboxEventMapper.markSent(event.getId(), claimToken, LocalDateTime.now());
                 log.debug("[Outbox] Event sent: eventId={}, type={}",
                         event.getEventId(), event.getEventType());
@@ -123,10 +122,45 @@ public class OutboxService {
     }
 
     private String resolveTopic(String eventType) {
+        if (MQConstants.TAG_ORDER_TIMEOUT_CHECK.equals(eventType)) {
+            return MQConstants.ORDER_TIMEOUT_TOPIC;
+        }
         if (eventType.startsWith("ORDER_")) {
             return MQConstants.ORDER_TOPIC;
         }
         return MQConstants.ORDER_TOPIC; // default
+    }
+
+    /**
+     * 普通领域事件立即发送；超时检查事件按绝对时间投递为 RocketMQ 5 定时消息。
+     * 若 Outbox 晚于截止时间才恢复，则立即发送，由消费者再次校验数据库状态。
+     */
+    private void sendToBroker(OutboxEventPO event) throws JsonProcessingException {
+        String destination = resolveTopic(event.getEventType()) + ":" + event.getEventType();
+        if (!MQConstants.TAG_ORDER_TIMEOUT_CHECK.equals(event.getEventType())) {
+            rocketMQTemplate.syncSend(destination, event.getPayload(), 1000);
+            return;
+        }
+
+        JsonNode payload = objectMapper.readTree(event.getPayload());
+        long deliverAt = payload.path("deliverAtEpochMs").asLong(0L);
+        if (deliverAt <= 0L) {
+            throw new IllegalStateException("Timeout event is missing deliverAtEpochMs");
+        }
+        if (deliverAt <= System.currentTimeMillis()) {
+            rocketMQTemplate.syncSend(destination, event.getPayload(), 1000);
+        } else {
+            rocketMQTemplate.syncSendDeliverTimeMills(destination, event.getPayload(), deliverAt);
+        }
+    }
+
+    public List<OutboxEventPO> listDead(int limit) {
+        return outboxEventMapper.selectDead(Math.max(1, Math.min(limit, 200)));
+    }
+
+    public boolean retryDead(Long eventId) {
+        return eventId != null
+                && outboxEventMapper.requeueDead(eventId, LocalDateTime.now()) == 1;
     }
 
     /**

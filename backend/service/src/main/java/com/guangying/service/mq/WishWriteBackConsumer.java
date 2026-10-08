@@ -52,7 +52,6 @@ public class WishWriteBackConsumer implements RocketMQListener<WishEvent> {
                         event.getUserId(), event.getMovieId());
             }
 
-            // RocketMQ 至少一次投递：唯一索引冲突说明该业务事件已经落库，不得重复累加。
             if (!inserted) return;
 
             MoviePO movie = movieMapper.selectById(event.getMovieId());

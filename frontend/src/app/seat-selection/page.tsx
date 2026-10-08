@@ -50,9 +50,12 @@ function SeatSelectionContent() {
             setQueueWait(data.estimatedWaitSeconds)
           }
         })
-        .catch(() => {
-          // 排队接口失败 → 直接放行（降级安全）
-          setQueueAdmitted(true)
+        .catch((error) => {
+          // 热门场次的锁座接口会严格校验入场令牌。这里不能假放行，
+          // 否则用户选完座后才发现没有资格，体验和后端安全策略都不一致。
+          const message = error?.response?.data?.message || '排队服务暂时不可用，请稍后重试'
+          toast.error(message)
+          router.back()
         })
         .finally(() => setQueueChecked(true))
     } else {
@@ -60,7 +63,7 @@ function SeatSelectionContent() {
       setQueueAdmitted(true)
       setQueueChecked(true)
     }
-  }, [scheduleId, isLogged])
+  }, [scheduleId, isLogged, router])
 
   // 第二步：排队通过后加载数据
   useEffect(() => {

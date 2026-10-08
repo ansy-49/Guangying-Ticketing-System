@@ -1,7 +1,7 @@
 package com.guangying.service.auth;
 
-import com.guangying.domain.model.dto.UserLoginDTO;
 import com.guangying.domain.model.po.UserPO;
+import com.guangying.domain.model.dto.UserLoginDTO;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -9,9 +9,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** 登录责任链：Spring 自动收集节点，并按 order 顺序执行。 */
+/**
+ * 登录责任链：Spring 自动收集节点，并按 order 顺序执行。
+ */
 @Component
 public class LoginValidationChain {
+
     private final List<LoginHandler> handlers;
 
     public LoginValidationChain(List<LoginHandler> handlers) {

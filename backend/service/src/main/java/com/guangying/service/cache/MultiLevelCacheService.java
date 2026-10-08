@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
@@ -52,6 +53,9 @@ public class MultiLevelCacheService {
 
     @Autowired(required = false)
     private DistributedLockService distributedLockService;
+
+    /** Redis/Redisson 故障时仍按 Key 合并单实例并发回源，避免本机线程同时打向数据库。 */
+    private final ReentrantLock[] localRebuildLocks = createLocalRebuildLocks(64);
 
     /** L1 本地缓存 — 短 TTL、小容量 */
     private final Cache<String, Object> l1Cache = Caffeine.newBuilder()
@@ -106,26 +110,46 @@ public class MultiLevelCacheService {
             return unwrapCachedValue(l2Val);
         }
 
-        // 3. 热点 Key 回源：跨实例争抢 Redisson 锁，持锁者二次检查后才能访问 DB。
-        if (distributedLockService != null) {
-            CacheLoadResult<T> result = distributedLockService.executeWithWatchdogLock(
-                    "cache:rebuild:" + key,
-                    CacheConstants.CACHE_REBUILD_LOCK_WAIT_SECONDS,
-                    () -> new CacheLoadResult<>(loadAfterDoubleCheck(key, loader)));
-            if (result != null) {
-                return result.value();
+        // 3. 先在单实例内合并并发，再用 Redisson 跨实例互斥。
+        ReentrantLock localLock = localRebuildLocks[Math.floorMod(key.hashCode(), localRebuildLocks.length)];
+        localLock.lock();
+        try {
+            Object cachedAfterLocalWait = getCachedValue(key);
+            if (cachedAfterLocalWait != null) {
+                return unwrapCachedValue(cachedAfterLocalWait);
             }
 
-            // 锁等待超时通常意味着其他实例正在重建；先复查缓存，避免无谓回源。
-            Object cached = getCachedValue(key);
-            if (cached != null) {
-                return unwrapCachedValue(cached);
+            // 热点 Key 回源：跨实例争抢 Redisson 锁，持锁者二次检查后才能访问 DB。
+            if (distributedLockService != null) {
+                CacheLoadResult<T> result = distributedLockService.executeWithWatchdogLock(
+                        "cache:rebuild:" + key,
+                        CacheConstants.CACHE_REBUILD_LOCK_WAIT_SECONDS,
+                        () -> new CacheLoadResult<>(loadAfterDoubleCheck(key, loader)));
+                if (result != null) {
+                    return result.value();
+                }
+
+                // 锁等待超时通常意味着其他实例正在重建；先复查缓存，避免无谓回源。
+                Object cached = getCachedValue(key);
+                if (cached != null) {
+                    return unwrapCachedValue(cached);
+                }
+                log.warn("[Cache] Rebuild lock timeout for key={}, fallback to DB for availability", key);
             }
-            log.warn("[Cache] Rebuild lock timeout for key={}, fallback to DB for availability", key);
+
+            // Redisson 不可用或等待超时且缓存仍为空时，单实例仍保持 single-flight。
+            return loadAndFill(key, loader);
+        } finally {
+            localLock.unlock();
         }
+    }
 
-        // Redisson 不可用或等待超时且缓存仍为空时，降级回源，优先保证接口可用。
-        return loadAndFill(key, loader);
+    private static ReentrantLock[] createLocalRebuildLocks(int stripes) {
+        ReentrantLock[] locks = new ReentrantLock[stripes];
+        for (int i = 0; i < stripes; i++) {
+            locks[i] = new ReentrantLock();
+        }
+        return locks;
     }
 
     @SuppressWarnings("unchecked")
@@ -283,26 +307,18 @@ public class MultiLevelCacheService {
         log.debug("[Cache] EVICTED by prefix: {}", prefix);
     }
 
-    /** 仅清理当前 JVM 的 L1；供 Redis Pub/Sub 订阅端调用，避免再次广播。 */
     public void evictLocal(String key) {
         l1Cache.invalidate(key);
         l1NullCache.invalidate(key);
         l1LongTermCache.invalidate(key);
     }
 
-    /** 仅按前缀清理当前 JVM 的 L1。 */
     public void evictLocalByPrefix(String prefix) {
-        l1Cache.asMap().keySet().stream()
-                .filter(k -> k.startsWith(prefix))
-                .toList()
+        l1Cache.asMap().keySet().stream().filter(k -> k.startsWith(prefix)).toList()
                 .forEach(l1Cache::invalidate);
-        l1NullCache.asMap().keySet().stream()
-                .filter(k -> k.startsWith(prefix))
-                .toList()
+        l1NullCache.asMap().keySet().stream().filter(k -> k.startsWith(prefix)).toList()
                 .forEach(l1NullCache::invalidate);
-        l1LongTermCache.asMap().keySet().stream()
-                .filter(k -> k.startsWith(prefix))
-                .toList()
+        l1LongTermCache.asMap().keySet().stream().filter(k -> k.startsWith(prefix)).toList()
                 .forEach(l1LongTermCache::invalidate);
     }
 
@@ -320,7 +336,6 @@ public class MultiLevelCacheService {
         try {
             stringRedisTemplate.convertAndSend(CacheConstants.CACHE_INVALIDATION_CHANNEL, message);
         } catch (Exception e) {
-            // L2 已删除，广播失败时仍由 L1 短 TTL 限制不一致窗口。
             log.warn("[Cache] Invalidation broadcast failed: {}", e.getMessage());
         }
     }

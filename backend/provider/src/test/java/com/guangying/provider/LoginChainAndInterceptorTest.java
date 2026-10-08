@@ -72,10 +72,12 @@ class LoginChainAndInterceptorTest {
 
         assertFalse(response.containsHeader(RequestContextInterceptor.REQUEST_ID_HEADER));
         interceptor.preHandle(request, response, new Object());
+
         Object requestId = request.getAttribute(RequestContextInterceptor.REQUEST_ID_ATTRIBUTE);
         assertNotNull(requestId);
         assertEquals(requestId, response.getHeader(RequestContextInterceptor.REQUEST_ID_HEADER));
         assertEquals(requestId, MDC.get(RequestContextInterceptor.REQUEST_ID_ATTRIBUTE));
+
         interceptor.afterCompletion(request, response, new Object(), null);
         assertNull(MDC.get(RequestContextInterceptor.REQUEST_ID_ATTRIBUTE));
     }
@@ -83,7 +85,9 @@ class LoginChainAndInterceptorTest {
     private LoginHandler handler(int order, List<Integer> invoked, HandlerAction action) {
         return new LoginHandler() {
             @Override
-            public int order() { return order; }
+            public int order() {
+                return order;
+            }
 
             @Override
             public void handle(LoginContext context) {

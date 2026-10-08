@@ -82,6 +82,7 @@ public class UserService {
             user.setUserNick(dto.getUserNick() != null ? dto.getUserNick() : account);
             user.setUserHeadImg(CommonConstants.DEFAULT_HEAD_IMG);
             user.setPoints(500);
+            user.setRole("USER");
 
             userMapper.insert(user);
             log.info("用户注册成功: id={}, account={}, points=500", user.getId(), account);
@@ -123,6 +124,14 @@ public class UserService {
         UserPO po = userMapper.selectById(userId);
         if (po == null || po.getDeleted() == 1) return null;
         return toVO(po, false);
+    }
+
+    /** 管理接口统一鉴权，避免仅凭登录状态即可修改系统级配置。 */
+    public void requireAdmin(Long userId) {
+        UserPO user = userId == null ? null : userMapper.selectById(userId);
+        if (user == null || user.getDeleted() == 1 || !"ADMIN".equalsIgnoreCase(user.getRole())) {
+            throw new BizException(ResponseCodeEnum.FORBIDDEN, "仅管理员可执行该操作");
+        }
     }
 
     private UserVO toVO(UserPO po, boolean includeToken) {

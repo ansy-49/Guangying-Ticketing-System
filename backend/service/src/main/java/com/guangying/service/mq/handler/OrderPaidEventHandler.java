@@ -8,6 +8,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
+/**
+ * 订单支付事件：从数据库重建已售座位投影。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

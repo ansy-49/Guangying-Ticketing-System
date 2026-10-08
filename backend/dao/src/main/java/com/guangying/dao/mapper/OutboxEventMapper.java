@@ -74,6 +74,19 @@ public interface OutboxEventMapper extends BaseMapper<OutboxEventPO> {
                   @Param("nextRetryTime") LocalDateTime nextRetryTime,
                   @Param("lastError") String lastError);
 
+    /** 管理端查看需要人工处理的事件。 */
+    @Select("SELECT * FROM outbox_event WHERE status = 'DEAD' ORDER BY create_time ASC LIMIT #{limit}")
+    List<OutboxEventPO> selectDead(@Param("limit") int limit);
+
+    /** 人工重放只能作用于 DEAD，避免把已发送事件再次投入队列。 */
+    @Update("""
+            UPDATE outbox_event
+            SET status = 'PENDING', retries = 0, next_retry_time = #{now},
+                claim_token = NULL, claimed_until = NULL, last_error = NULL
+            WHERE id = #{id} AND status = 'DEAD'
+            """)
+    int requeueDead(@Param("id") Long id, @Param("now") LocalDateTime now);
+
     /**
      * 删除 7 天前已发送的事件（清理）
      */

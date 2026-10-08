@@ -81,8 +81,11 @@ public final class CacheConstants {
     /** lockToken 映射: seat:locktoken:{token} → {userId, scheduleId, seats} */
     public static final String SEAT_LOCK_TOKEN_PREFIX = "seat:locktoken:";
 
-    /** 选座图渲染缓存: seat:layout:rendered:{scheduleId} — 3~5s TTL */
+    /** 选座图渲染缓存: seat:layout:rendered:{scheduleId} — 主动失效，短 TTL 兜底 */
     public static final String SEAT_LAYOUT_RENDERED_PREFIX = "seat:layout:rendered:";
+
+    /** 座位图展示允许的最长兜底旧值窗口（秒） */
+    public static final long SEAT_LAYOUT_RENDERED_TTL_SECONDS = 1;
 
     /** 余票计数器: seat:count:{scheduleId} — 仅展示用，不参与锁座前置门 */
     public static final String SEAT_COUNT_PREFIX = "seat:count:";

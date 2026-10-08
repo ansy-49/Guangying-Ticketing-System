@@ -2,6 +2,7 @@ package com.guangying.provider.controller;
 
 import com.guangying.common.annotation.RateLimit;
 import com.guangying.common.enums.RateLimitAlgorithm;
+import com.guangying.common.enums.RateLimitDimension;
 import com.guangying.domain.model.vo.OrderVO;
 import com.guangying.domain.model.vo.Result;
 import com.guangying.service.PaymentService;
@@ -23,7 +24,10 @@ public class PaymentController {
      * 模拟支付
      */
     @PostMapping("/pay")
-    @RateLimit(key = "payment:pay", algorithm = RateLimitAlgorithm.TOKEN_BUCKET, capacity = 5, refillRate = 2)
+    @RateLimit(key = "payment:pay", algorithm = RateLimitAlgorithm.TOKEN_BUCKET,
+            capacity = 6, refillRate = 2)
+    @RateLimit(key = "payment:pay", algorithm = RateLimitAlgorithm.TOKEN_BUCKET,
+            dimension = RateLimitDimension.GLOBAL, capacity = 600, refillRate = 200)
     public Result<OrderVO> pay(
             @RequestParam String orderNo,
             HttpServletRequest request) {

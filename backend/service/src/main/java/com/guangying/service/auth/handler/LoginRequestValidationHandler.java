@@ -6,11 +6,16 @@ import com.guangying.service.auth.LoginContext;
 import com.guangying.service.auth.LoginHandler;
 import org.springframework.stereotype.Component;
 
-/** 责任 1：服务层参数兜底与账号规范化。 */
+/**
+ * 责任 1：服务层参数兜底与账号规范化。
+ */
 @Component
 public class LoginRequestValidationHandler implements LoginHandler {
+
     @Override
-    public int order() { return 10; }
+    public int order() {
+        return 10;
+    }
 
     @Override
     public void handle(LoginContext context) {

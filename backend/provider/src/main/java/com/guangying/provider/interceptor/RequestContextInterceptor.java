@@ -9,9 +9,12 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-/** 拦截链第一环：建立请求上下文并传递 Request ID。 */
+/**
+ * 拦截链第一环：建立请求上下文并传递 Request ID。
+ */
 @Component
 public class RequestContextInterceptor implements HandlerInterceptor {
+
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     public static final String REQUEST_ID_ATTRIBUTE = "requestId";
     private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");

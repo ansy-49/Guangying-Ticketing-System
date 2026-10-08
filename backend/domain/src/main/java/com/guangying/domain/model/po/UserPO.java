@@ -32,4 +32,7 @@ public class UserPO extends BaseEntity {
 
     /** 用户积分(1积分=1元) */
     private Integer points = 0;
+
+    /** 角色：USER / ADMIN。管理接口必须由服务端根据该字段授权。 */
+    private String role = "USER";
 }

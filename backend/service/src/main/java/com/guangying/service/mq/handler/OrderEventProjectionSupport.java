@@ -3,6 +3,7 @@ package com.guangying.service.mq.handler;
 import com.guangying.common.constants.CacheConstants;
 import com.guangying.dao.mapper.ScheduleMapper;
 import com.guangying.domain.model.po.SchedulePO;
+import com.guangying.service.cache.SeatLayoutCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ public class OrderEventProjectionSupport {
     private StringRedisTemplate stringRedisTemplate;
 
     private final ScheduleMapper scheduleMapper;
+    private final SeatLayoutCacheService seatLayoutCacheService;
 
     /**
      * 从 MySQL 权威库存覆盖 Redis 展示计数。重复消费只会重复写入同一个值，
@@ -58,15 +60,7 @@ public class OrderEventProjectionSupport {
     }
 
     public void invalidateSeatLayout(Long scheduleId) {
-        if (stringRedisTemplate == null || scheduleId == null) {
-            return;
-        }
-        try {
-            stringRedisTemplate.delete(CacheConstants.SEAT_LAYOUT_RENDERED_PREFIX + scheduleId);
-        } catch (Exception e) {
-            log.warn("[OrderProjection] Failed to invalidate seat layout: scheduleId={}",
-                    scheduleId, e);
-        }
+        seatLayoutCacheService.invalidate(scheduleId);
     }
 
     public Long toLong(Object value) {

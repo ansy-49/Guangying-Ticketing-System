@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
- * 光影票务后端服务启动类
+ * 光影后端服务启动类
  */
 @SpringBootApplication(scanBasePackages = "com.guangying")
 @MapperScan("com.guangying.dao.mapper")

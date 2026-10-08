@@ -2,6 +2,7 @@ package com.guangying.provider.controller;
 
 import com.guangying.common.annotation.RateLimit;
 import com.guangying.common.enums.RateLimitAlgorithm;
+import com.guangying.common.enums.RateLimitDimension;
 import com.guangying.domain.model.dto.LockSeatsDTO;
 import com.guangying.domain.model.vo.OrderVO;
 import com.guangying.domain.model.vo.Result;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
  *
  * <h3>架构：</h3>
  * <pre>
- * 用户请求 → @RateLimit 令牌桶（用户维度）
+ * 用户请求 → @RateLimit 分层令牌桶（用户 + 场次 + 全局）
  *          → Redis Lua 原子锁座（争抢在此终结）
  *          → DB 事务建单（INSERT seat_lock + orders）
  *          → 返回 orderNo → 前端跳支付页
@@ -48,10 +49,16 @@ public class SeatController {
     /**
      * 锁座 + 建单 — 一个请求完成，返回 orderNo 直接跳支付
      *
-     * <p>限流策略：令牌桶算法，桶容量5（最大突发），每秒补充2个令牌</p>
+     * <p>限流策略：用户级防重复提交，场次级吸收单热点洪峰，全局级保护锁座集群。</p>
      */
     @PostMapping("/lock")
-    @RateLimit(key = "seat:lock", algorithm = RateLimitAlgorithm.TOKEN_BUCKET, capacity = 5, refillRate = 2)
+    @RateLimit(key = "seat:lock", algorithm = RateLimitAlgorithm.TOKEN_BUCKET,
+            capacity = 8, refillRate = 2)
+    @RateLimit(key = "seat:lock", algorithm = RateLimitAlgorithm.TOKEN_BUCKET,
+            dimension = RateLimitDimension.RESOURCE, dimensionKey = "#dto.scheduleId",
+            capacity = 400, refillRate = 120)
+    @RateLimit(key = "seat:lock", algorithm = RateLimitAlgorithm.TOKEN_BUCKET,
+            dimension = RateLimitDimension.GLOBAL, capacity = 1200, refillRate = 400)
     public Result<OrderVO> lockSeats(
             @Valid @RequestBody LockSeatsDTO dto,
             HttpServletRequest request) {

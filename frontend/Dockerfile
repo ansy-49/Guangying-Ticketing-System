@@ -1,5 +1,5 @@
 # =========================================
-# 光影票务前端 - 多阶段构建 Dockerfile
+# 光影前端 - 多阶段构建 Dockerfile
 #
 # Stage 1: Node.js 编译
 # Stage 2: Node.js 运行 standalone server

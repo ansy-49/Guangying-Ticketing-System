@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS sys_user (
     user_nick      VARCHAR(100),
     user_head_img  VARCHAR(500),
     points         INT DEFAULT 0        COMMENT '用户积分(1积分=1元)',
+    role           VARCHAR(20) NOT NULL DEFAULT 'USER' COMMENT '角色：USER/ADMIN',
     create_time    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     update_time    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted        INT DEFAULT 0,
@@ -179,11 +180,13 @@ CREATE TABLE IF NOT EXISTS ticket_order (
     expire_time     TIMESTAMP     NULL          COMMENT '支付截止时间',
     pay_time        TIMESTAMP     NULL          COMMENT '支付时间',
     cancel_time     TIMESTAMP     NULL          COMMENT '取消时间',
+    cancel_reason   VARCHAR(32)   NULL          COMMENT '取消原因',
     create_time     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
     update_time     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted         INT           DEFAULT 0,
     INDEX idx_order_user (user_id, status, deleted),
     INDEX idx_order_no (order_no),
+    INDEX idx_order_expire (status, deleted, expire_time, id),
     UNIQUE INDEX idx_order_idempotency (user_id, idempotency_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -249,7 +252,7 @@ CREATE TABLE IF NOT EXISTS order_seat (
 CREATE TABLE IF NOT EXISTS outbox_event (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
     event_id     VARCHAR(64) NOT NULL UNIQUE COMMENT '全局事件ID/消费幂等键',
-    event_type   VARCHAR(64) NOT NULL COMMENT 'ORDER_CREATED/ORDER_PAID/ORDER_CANCELLED/ORDER_TIMEOUT',
+    event_type   VARCHAR(64) NOT NULL COMMENT 'ORDER_CREATED/ORDER_PAID/ORDER_CANCELLED',
     payload      TEXT        NOT NULL COMMENT 'JSON 载荷',
     status       VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/PROCESSING/SENT/DEAD',
     create_time  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
@@ -259,7 +262,9 @@ CREATE TABLE IF NOT EXISTS outbox_event (
     claimed_until TIMESTAMP NULL,
     last_error   VARCHAR(1000) NULL,
     retries      INT         DEFAULT 0,
-    INDEX idx_outbox_status_create (status, create_time)
+    INDEX idx_outbox_status_create (status, create_time),
+    INDEX idx_outbox_retry (status, next_retry_time),
+    INDEX idx_outbox_claim (status, claimed_until)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS processed_event (

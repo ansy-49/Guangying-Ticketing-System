@@ -64,6 +64,23 @@ guangying:
   rate-limit:
     max-requests: 100
     window-seconds: 60
+    # 默认不信任客户端可伪造的 X-Forwarded-For；Docker 只允许 Nginx 访问后端时开启。
+    trust-proxy-headers: ${RATE_LIMIT_TRUST_PROXY_HEADERS:false}
+  queue:
+    # 热门场次预热后，前 2000 名用户持有准入租约；超过该值才进入 Waiting Room。
+    # 这是集群部署参考基线，不代表未压测环境的真实容量。
+    default-max-admission: ${QUEUE_DEFAULT_MAX_ADMISSION:2000}
+    max-admission-upper-bound: ${QUEUE_MAX_ADMISSION_UPPER_BOUND:20000}
+    # 单场次等待队列硬上限，避免洪峰时 Redis ZSet 无界增长。
+    max-waiting: ${QUEUE_MAX_WAITING:100000}
+  order:
+    # RocketMQ 定时消息是主触发器；数据库扫描只补偿漏消息、Broker 故障和历史积压。
+    timeout-scan-interval-ms: ${ORDER_TIMEOUT_SCAN_INTERVAL_MS:60000}
+    timeout-scan-batch-size: ${ORDER_TIMEOUT_SCAN_BATCH_SIZE:100}
+    timeout-scan-max-batches: ${ORDER_TIMEOUT_SCAN_MAX_BATCHES:10}
+  outbox:
+    max-retries: ${OUTBOX_MAX_RETRIES:10}
+    claim-seconds: ${OUTBOX_CLAIM_SECONDS:30}
 
 # ========== 日志 ==========
 logging:

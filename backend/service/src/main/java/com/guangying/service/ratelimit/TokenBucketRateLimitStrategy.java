@@ -5,6 +5,9 @@ import com.guangying.service.infrastructure.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * 令牌桶策略：适合允许短时突发、限制长期平均速率的交易接口。
+ */
 @Component
 @RequiredArgsConstructor
 public class TokenBucketRateLimitStrategy implements RateLimitStrategy {

@@ -10,14 +10,19 @@ import com.guangying.service.auth.LoginHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** 责任 3：查询有效用户并写入登录上下文。 */
+/**
+ * 责任 3：查询有效用户并写入登录上下文。
+ */
 @Component
 @RequiredArgsConstructor
 public class LoginUserLookupHandler implements LoginHandler {
+
     private final UserMapper userMapper;
 
     @Override
-    public int order() { return 30; }
+    public int order() {
+        return 30;
+    }
 
     @Override
     public void handle(LoginContext context) {

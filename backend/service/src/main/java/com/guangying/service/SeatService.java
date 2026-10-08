@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.guangying.common.constants.CacheConstants;
+import com.guangying.common.constants.MQConstants;
 import com.guangying.dao.mapper.*;
 import com.guangying.domain.enums.OrderStatusEnum;
 import com.guangying.domain.enums.ResponseCodeEnum;
@@ -18,6 +19,7 @@ import com.guangying.service.infrastructure.QueueService;
 import com.guangying.service.infrastructure.SeatLockScriptService;
 import com.guangying.service.infrastructure.SeatSoldService;
 import com.guangying.service.infrastructure.TransactionCallbacks;
+import com.guangying.service.cache.SeatLayoutCacheService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -70,6 +72,7 @@ public class SeatService {
     private final QueueService queueService;
     private final TransactionCallbacks transactionCallbacks;
     private final DistributedLockService distributedLockService;
+    private final SeatLayoutCacheService seatLayoutCacheService;
     private final TransactionTemplate purchaseTransaction;
 
     @Autowired(required = false)
@@ -92,6 +95,7 @@ public class SeatService {
                        QueueService queueService,
                        TransactionCallbacks transactionCallbacks,
                        DistributedLockService distributedLockService,
+                       SeatLayoutCacheService seatLayoutCacheService,
                        PlatformTransactionManager transactionManager) {
         this.cinemaHallMapper = cinemaHallMapper;
         this.seatLockMapper = seatLockMapper;
@@ -106,6 +110,7 @@ public class SeatService {
         this.queueService = queueService;
         this.transactionCallbacks = transactionCallbacks;
         this.distributedLockService = distributedLockService;
+        this.seatLayoutCacheService = seatLayoutCacheService;
         this.purchaseTransaction = new TransactionTemplate(transactionManager);
         this.purchaseTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
         this.purchaseTransaction.setTimeout(10);
@@ -118,39 +123,46 @@ public class SeatService {
     /**
      * 获取影厅座位布局（含实时锁定/已售状态）
      *
-     * <p>渲染缓存 seat:layout:rendered:{scheduleId} (3~5s TTL) 挡住高频刷新</p>
+     * <p>渲染缓存 seat:layout:rendered:{scheduleId} 由状态变更主动失效，短 TTL 兜底</p>
      */
     public SeatLayoutVO getSeatLayout(Long scheduleId, Long userId) {
+        SeatLayoutVO vo = null;
         // 1. 查渲染缓存
         if (stringRedisTemplate != null) {
             try {
                 String cacheKey = CacheConstants.SEAT_LAYOUT_RENDERED_PREFIX + scheduleId;
                 String cached = stringRedisTemplate.opsForValue().get(cacheKey);
                 if (cached != null) {
-                    return objectMapper.readValue(cached, SeatLayoutVO.class);
+                    vo = objectMapper.readValue(cached, SeatLayoutVO.class);
                 }
             } catch (Exception e) {
                 log.warn("[Seat] Failed to read render cache: scheduleId={}", scheduleId, e);
             }
         }
 
-        // 2. 组装
-        SeatLayoutVO vo = assembleSeatLayout(scheduleId, userId);
+        // 2. 只缓存公共座位状态。"我的锁定"依赖当前用户，不能进入共享缓存。
+        if (vo == null) {
+            vo = assemblePublicSeatLayout(scheduleId);
 
-        // 3. 回填渲染缓存
-        if (stringRedisTemplate != null && vo != null) {
-            try {
-                String cacheKey = CacheConstants.SEAT_LAYOUT_RENDERED_PREFIX + scheduleId;
-                stringRedisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(vo), 5, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.warn("[Seat] Failed to write render cache: scheduleId={}", scheduleId, e);
+            // 3. 回填的仍是与用户无关的公共视图
+            if (stringRedisTemplate != null && vo != null) {
+                try {
+                    String cacheKey = CacheConstants.SEAT_LAYOUT_RENDERED_PREFIX + scheduleId;
+                    stringRedisTemplate.opsForValue().set(
+                            cacheKey, objectMapper.writeValueAsString(vo),
+                            CacheConstants.SEAT_LAYOUT_RENDERED_TTL_SECONDS, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    log.warn("[Seat] Failed to write render cache: scheduleId={}", scheduleId, e);
+                }
             }
         }
 
+        // 4. 每次请求最后再叠加当前用户的锁定状态，避免跨用户缓存污染。
+        applyCurrentUserLocks(vo, scheduleId, userId);
         return vo;
     }
 
-    private SeatLayoutVO assembleSeatLayout(Long scheduleId, Long userId) {
+    private SeatLayoutVO assemblePublicSeatLayout(Long scheduleId) {
         SchedulePO schedule = scheduleMapper.selectById(scheduleId);
         if (schedule == null || schedule.getDeleted() == 1) {
             throw new BizException(ResponseCodeEnum.NOT_FOUND.getCode(), "场次不存在");
@@ -198,11 +210,7 @@ public class SeatService {
                 } else {
                     String owner = lockScriptService.getSeatOwner(scheduleId, r, c);
                     if (owner != null) {
-                        if (owner.equals(String.valueOf(userId))) {
-                            info.setStatus(3); // 我锁定的
-                        } else {
-                            info.setStatus(2); // 他人锁定
-                        }
+                        info.setStatus(2); // 公共缓存只记录“已锁定”，不区分锁持有人
                     } else {
                         info.setStatus(0); // 可选
                     }
@@ -213,6 +221,28 @@ public class SeatService {
         }
         vo.setSeats(seats);
         return vo;
+    }
+
+    private void applyCurrentUserLocks(SeatLayoutVO vo, Long scheduleId, Long userId) {
+        if (vo == null || vo.getSeats() == null) {
+            return;
+        }
+        for (List<SeatLayoutVO.SeatInfo> row : vo.getSeats()) {
+            for (SeatLayoutVO.SeatInfo seat : row) {
+                // 兼容部署前短暂残留的个性化渲染缓存，先恢复成公共锁定态。
+                if (seat.getStatus() != null && seat.getStatus() == 3) {
+                    seat.setStatus(2);
+                }
+                if (userId == null || userId <= 0 || seat.getStatus() == null || seat.getStatus() != 2) {
+                    continue;
+                }
+                String owner = lockScriptService.getSeatOwner(
+                        scheduleId, seat.getRow(), seat.getCol());
+                if (String.valueOf(userId).equals(owner)) {
+                    seat.setStatus(3);
+                }
+            }
+        }
     }
 
     // ============================================================
@@ -247,8 +277,6 @@ public class SeatService {
             return replay;
         }
 
-        // 幂等键锁覆盖整个数据库事务（包括 commit），避免同一请求在多实例上并发执行。
-        // Redis/Redisson 不可用时，数据库唯一索引仍提供最终的 at-most-once 兜底。
         OrderVO result;
         try {
             result = distributedLockService.executeWithBoundedLock(
@@ -258,7 +286,6 @@ public class SeatService {
                     () -> purchaseTransaction.execute(status ->
                             lockSeatsAndCreateOrderInTransaction(userId, dto, requestedSeats, fingerprint)));
         } catch (DataIntegrityViolationException e) {
-            // Redisson 降级或租约极端到期时，由数据库唯一索引裁决；事务回滚后重放胜者结果。
             replay = findByIdempotencyKey(userId, dto.getIdempotencyKey(), fingerprint);
             if (replay != null) {
                 return replay;
@@ -288,6 +315,7 @@ public class SeatService {
             return replay;
         }
 
+        // HTTP 重试先查 DB：同一用户、场次和座位组合已经存在待支付订单时，直接返回原订单。
         OrderVO existingOrder = findExistingPendingOrder(userId, scheduleId, requestedSeats);
         if (existingOrder != null) {
             log.info("[Seat] Idempotent retry returned existing order: orderNo={}, userId={}",
@@ -311,6 +339,8 @@ public class SeatService {
                     "锁座服务暂时不可用，请稍后重试");
         }
         if (lockResult == SeatLockScriptService.LockResult.ALREADY_OWNED) {
+            // 可能是第一次请求已经提交，也可能仍在提交窗口中。绝不再次建单，
+            // 更不能注册回滚补偿去释放第一次请求持有的 Redis 锁。
             existingOrder = findExistingPendingOrder(userId, scheduleId, requestedSeats);
             if (existingOrder != null) {
                 return existingOrder;
@@ -319,14 +349,28 @@ public class SeatService {
                     "该座位正在由当前账号的另一笔请求处理，请稍后查看订单");
         }
 
+        // Redis 锁已经对其他用户可见，先删除旧座位图，避免页面继续显示“可选”。
+        seatLayoutCacheService.invalidate(scheduleId);
+
         // DB 提交成功后才释放 Waiting Room 名额；包括 commit-time 异常在内的回滚
-        // 都会在事务真正结束后补偿 Redis 预占锁。
+        // 都会在事务真正结束后补偿 Redis 预占锁。提交/回滚后再删一次，
+        // 覆盖“并发请求在第一次 DEL 前读取、DEL 后才回填旧值”的竞态窗口。
         transactionCallbacks.register(
-                () -> queueService.leave(scheduleId, userId),
                 () -> {
-                    lockScriptService.releaseSeats(scheduleId, seats, userId);
-                    log.warn("[Seat] Transaction rolled back, Redis locks compensated: scheduleId={}, userId={}",
-                            scheduleId, userId);
+                    try {
+                        queueService.leave(scheduleId, userId);
+                    } finally {
+                        seatLayoutCacheService.invalidate(scheduleId);
+                    }
+                },
+                () -> {
+                    try {
+                        lockScriptService.releaseSeats(scheduleId, seats, userId);
+                        log.warn("[Seat] Transaction rolled back, Redis locks compensated: scheduleId={}, userId={}",
+                                scheduleId, userId);
+                    } finally {
+                        seatLayoutCacheService.invalidate(scheduleId);
+                    }
                 });
 
         return createOrderInTransaction(userId, dto, fingerprint);
@@ -421,6 +465,20 @@ public class SeatService {
         eventPayload.put("seatCount", seatCount);
         eventPayload.put("timestamp", System.currentTimeMillis());
         outboxService.writeEvent("ORDER_CREATED", eventPayload);
+
+        // 同事务登记超时检查事件。Outbox 提交后把它投递成 RocketMQ 5 定时消息；
+        // Broker 不可用时事件仍保留在本地消息表，数据库扫描继续作为漏消息兜底。
+        Map<String, Object> timeoutPayload = new LinkedHashMap<>();
+        timeoutPayload.put("type", MQConstants.TAG_ORDER_TIMEOUT_CHECK);
+        timeoutPayload.put("orderNo", orderNo);
+        timeoutPayload.put("userId", userId);
+        timeoutPayload.put("scheduleId", scheduleId);
+        timeoutPayload.put("seatCount", seatCount);
+        timeoutPayload.put("deliverAtEpochMs",
+                System.currentTimeMillis()
+                        + TimeUnit.MINUTES.toMillis(CacheConstants.ORDER_PAY_TIMEOUT_MINUTES));
+        timeoutPayload.put("timestamp", System.currentTimeMillis());
+        outboxService.writeEvent(MQConstants.TAG_ORDER_TIMEOUT_CHECK, timeoutPayload);
 
         log.info("[Seat] Lock+Order created: orderNo={}, userId={}, scheduleId={}, seats={}, total={}",
                 orderNo, userId, scheduleId, seatCount, order.getTotalPrice());

@@ -26,6 +26,8 @@ logs/
 # Java / Maven
 backend/**/target/
 !backend/.mvn/wrapper/maven-wrapper.jar
+.maven-home/
+.tools/
 
 # Node / Next.js
 frontend/node_modules/

@@ -1,6 +1,7 @@
 package com.guangying.provider.controller;
 
 import com.guangying.common.annotation.RateLimit;
+import com.guangying.common.enums.RateLimitDimension;
 import com.guangying.domain.model.vo.Result;
 import com.guangying.service.WishService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +25,8 @@ public class WishController {
      */
     @PostMapping("/wish/{movieId}")
     @RateLimit(key = "wish", maxRequests = 30, windowSeconds = 60)
+    @RateLimit(key = "wish", dimension = RateLimitDimension.GLOBAL,
+            maxRequests = 30000, windowSeconds = 60)
     public Result<Map<String, Object>> addWish(@PathVariable Long movieId, HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
         if (userId == null) {

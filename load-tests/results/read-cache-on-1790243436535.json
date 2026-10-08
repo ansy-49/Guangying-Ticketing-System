@@ -1,0 +1,22 @@
+{
+  "label": "cache-on",
+  "time": "2026-09-24T09:50:36.531Z",
+  "url": "http://localhost:18082/ajax/movieOnInfoList",
+  "requests": 3000,
+  "concurrency": 100,
+  "warmup": 100,
+  "successes": 3000,
+  "successRate": 100,
+  "wallTimeMs": 699.78,
+  "throughputRps": 4287.08,
+  "latencyMs": {
+    "avg": 23.09,
+    "p50": 18.99,
+    "p95": 48.84,
+    "p99": 65.71,
+    "max": 73.91
+  },
+  "responseCodes": {
+    "200": 3000
+  }
+}

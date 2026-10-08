@@ -1,6 +1,6 @@
 
 # =========================================================
-# 光影票务电影 - Docker Compose 单服务器全栈部署（2G内存优化版）
+# 光影电影 - Docker Compose 单服务器全栈部署（2G内存优化版）
 #
 # 架构：Next.js(前端) + Spring Boot(后端) + MySQL + Redis + RocketMQ
 # 启动：docker compose up -d --build
@@ -106,6 +106,25 @@ services:
     networks:
       - guangying-net
 
+  # 普通自动建 Topic 默认不是 DELAY 类型；定时消息 Topic 必须显式初始化。
+  rocketmq-init:
+    image: apache/rocketmq:5.1.4
+    container_name: rocketmq-init
+    restart: "no"
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        until sh mqadmin clusterList -n rocketmq-namesrv:9876 2>/dev/null
+        | grep -q DefaultCluster; do sleep 2; done;
+        sh mqadmin updateTopic -n rocketmq-namesrv:9876 -c DefaultCluster
+        -t guangying_order_timeout -a +message.type=DELAY
+    depends_on:
+      rocketmq-broker:
+        condition: service_started
+    networks:
+      - guangying-net
+
   # =================== Spring Boot 后端 ===================
   backend:
     build:
@@ -122,6 +141,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       ROCKETMQ_NAMESRV: rocketmq-namesrv:9876
+      RATE_LIMIT_TRUST_PROXY_HEADERS: "true"
+      QUEUE_DEFAULT_MAX_ADMISSION: ${QUEUE_DEFAULT_MAX_ADMISSION:-2000}
+      QUEUE_MAX_ADMISSION_UPPER_BOUND: ${QUEUE_MAX_ADMISSION_UPPER_BOUND:-20000}
+      QUEUE_MAX_WAITING: ${QUEUE_MAX_WAITING:-100000}
       JAVA_OPTS: "-Xms128m -Xmx200m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -Xss256k"
     mem_limit: 350m
     expose:
@@ -131,8 +154,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      rocketmq-broker:
-        condition: service_started
+      rocketmq-init:
+        condition: service_completed_successfully
     networks:
       - guangying-net
 

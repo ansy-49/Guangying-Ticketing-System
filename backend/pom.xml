@@ -16,7 +16,7 @@
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Guangying Backend</name>
-    <description>仿光影票务电影后端服务 - 微服务分层架构</description>
+    <description>仿光影电影后端服务 - 微服务分层架构</description>
 
     <modules>
         <module>domain</module>

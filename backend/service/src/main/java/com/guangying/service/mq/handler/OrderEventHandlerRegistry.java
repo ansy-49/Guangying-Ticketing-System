@@ -8,7 +8,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 命令处理器注册表：按事件类型路由并拒绝重复注册。
+ * 订单事件处理器注册表。
+ *
+ * <p>组合命令模式与注册表模式，通过事件类型路由到独立处理器。</p>
  */
 @Component
 public class OrderEventHandlerRegistry {

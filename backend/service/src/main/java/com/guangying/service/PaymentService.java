@@ -3,7 +3,6 @@ package com.guangying.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.guangying.dao.mapper.OrderMapper;
 import com.guangying.dao.mapper.OrderSeatMapper;
-import com.guangying.dao.mapper.ScheduleMapper;
 import com.guangying.dao.mapper.SeatLockMapper;
 import com.guangying.dao.mapper.UserMapper;
 import com.guangying.domain.enums.OrderStatusEnum;
@@ -16,8 +15,8 @@ import com.guangying.domain.model.po.OrderSeatPO;
 import com.guangying.domain.model.po.SeatLockPO;
 import com.guangying.domain.model.po.UserPO;
 import com.guangying.domain.model.vo.OrderVO;
+import com.guangying.service.cache.SeatLayoutCacheService;
 import com.guangying.service.infrastructure.OutboxService;
-import com.guangying.service.infrastructure.QueueService;
 import com.guangying.service.infrastructure.SeatLockScriptService;
 import com.guangying.service.infrastructure.SeatSoldService;
 import com.guangying.service.infrastructure.TransactionCallbacks;
@@ -29,7 +28,6 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * 支付服务 — 目标架构：已售态写 DB（权威），Redis 更新只读投影
@@ -47,36 +45,36 @@ public class PaymentService {
     private final OrderMapper orderMapper;
     private final SeatLockMapper seatLockMapper;
     private final OrderSeatMapper orderSeatMapper;
-    private final ScheduleMapper scheduleMapper;
     private final UserMapper userMapper;
     private final SeatLockScriptService lockScriptService;
     private final SeatSoldService soldService;
     private final OutboxService outboxService;
-    private final QueueService queueService;
     private final TransactionCallbacks transactionCallbacks;
+    private final OrderCloseService orderCloseService;
+    private final SeatLayoutCacheService seatLayoutCacheService;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public PaymentService(OrderMapper orderMapper,
                           SeatLockMapper seatLockMapper,
                           OrderSeatMapper orderSeatMapper,
-                          ScheduleMapper scheduleMapper,
                           UserMapper userMapper,
                           SeatLockScriptService lockScriptService,
                           SeatSoldService soldService,
                           OutboxService outboxService,
-                          QueueService queueService,
-                          TransactionCallbacks transactionCallbacks) {
+                          TransactionCallbacks transactionCallbacks,
+                          OrderCloseService orderCloseService,
+                          SeatLayoutCacheService seatLayoutCacheService) {
         this.orderMapper = orderMapper;
         this.seatLockMapper = seatLockMapper;
         this.orderSeatMapper = orderSeatMapper;
-        this.scheduleMapper = scheduleMapper;
         this.userMapper = userMapper;
         this.lockScriptService = lockScriptService;
         this.soldService = soldService;
         this.outboxService = outboxService;
-        this.queueService = queueService;
         this.transactionCallbacks = transactionCallbacks;
+        this.orderCloseService = orderCloseService;
+        this.seatLayoutCacheService = seatLayoutCacheService;
     }
 
     /**
@@ -99,8 +97,9 @@ public class PaymentService {
             throw new BizException(ResponseCodeEnum.BAD_REQUEST.getCode(), "订单状态不允许支付");
         }
         if (order.getExpireTime() != null && now.isAfter(order.getExpireTime())) {
-            closeExpiredOrder(order, now);
-            // closeExpiredOrder 的 DB 状态与 Outbox 必须先提交，再向调用方返回过期提示。
+            orderCloseService.closeExpired(
+                    orderNo, OrderCloseService.REASON_PAYMENT_LAZY_EXPIRE);
+            // 统一关单逻辑的 DB 状态与 Outbox 必须先提交，再向调用方返回过期提示。
             throw new OrderExpiredException();
         }
 
@@ -184,11 +183,11 @@ public class PaymentService {
         try {
             // 释放锁 + 写入已售投影（Lua 脚本已包含 SADD，无需重复）
             lockScriptService.releaseLocksAndMarkSold(scheduleId, seats, userId);
-
-            // 失效渲染缓存
-            invalidateRenderCache(scheduleId);
         } catch (Exception e) {
             log.error("[Payment] Failed to update Redis projection: scheduleId={}", scheduleId, e);
+        } finally {
+            // 不论投影更新是否成功，都不让共享座位图继续返回旧状态。
+            seatLayoutCacheService.invalidate(scheduleId);
         }
     }
 
@@ -207,51 +206,6 @@ public class PaymentService {
         wrapper.eq(OrderPO::getOrderNo, orderNo)
                 .eq(OrderPO::getUserId, userId);
         return orderMapper.selectOne(wrapper);
-    }
-
-    private void closeExpiredOrder(OrderPO order, LocalDateTime now) {
-        int closed = orderMapper.closePendingOrder(order.getOrderNo(), now);
-        if (closed == 0) return;
-
-        List<LockSeatsDTO.SeatPos> positions = loadSeatPositions(order.getOrderNo());
-
-        scheduleMapper.rollbackStock(order.getScheduleId(), order.getSeatCount());
-        seatLockMapper.releaseOrderLocks(order.getOrderNo());
-
-        // outbox event
-        Map<String, Object> eventPayload = new LinkedHashMap<>();
-        eventPayload.put("type", "ORDER_CANCELLED");
-        eventPayload.put("orderNo", order.getOrderNo());
-        eventPayload.put("scheduleId", order.getScheduleId());
-        eventPayload.put("seatCount", order.getSeatCount());
-        eventPayload.put("timestamp", System.currentTimeMillis());
-        outboxService.writeEvent("ORDER_CANCELLED", eventPayload);
-
-        transactionCallbacks.afterCommit(() -> {
-            if (!positions.isEmpty()) {
-                lockScriptService.releaseSeats(
-                        order.getScheduleId(), positions, order.getUserId());
-            }
-            invalidateRenderCache(order.getScheduleId());
-            queueService.leave(order.getScheduleId(), order.getUserId());
-        });
-
-        log.info("[Payment] Expired order closed: orderNo={}", order.getOrderNo());
-    }
-
-    private List<LockSeatsDTO.SeatPos> loadSeatPositions(String orderNo) {
-        List<SeatLockPO> locks = seatLockMapper.selectLocksByOrderNo(orderNo);
-        if (locks == null) return List.of();
-        return locks.stream().map(lock -> {
-            LockSeatsDTO.SeatPos pos = new LockSeatsDTO.SeatPos();
-            pos.setRow(lock.getRowNum());
-            pos.setCol(lock.getColNum());
-            return pos;
-        }).toList();
-    }
-
-    private void invalidateRenderCache(Long scheduleId) {
-        // 渲染缓存自然过期即可（3-5s TTL），无需主动删除
     }
 
     private OrderVO toVO(OrderPO po) {

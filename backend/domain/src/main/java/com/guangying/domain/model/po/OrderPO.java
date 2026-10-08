@@ -83,4 +83,7 @@ public class OrderPO extends BaseEntity {
 
     /** 取消时间 */
     private LocalDateTime cancelTime;
+
+    /** 取消原因：USER_CANCEL / DELAY_MESSAGE / PAYMENT_LAZY_EXPIRE / DB_SCAN_FALLBACK */
+    private String cancelReason;
 }

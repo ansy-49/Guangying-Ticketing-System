@@ -7,11 +7,16 @@ import com.guangying.service.auth.LoginContext;
 import com.guangying.service.auth.LoginHandler;
 import org.springframework.stereotype.Component;
 
-/** 责任 4：BCrypt 密码校验。 */
+/**
+ * 责任 4：BCrypt 密码校验。
+ */
 @Component
 public class LoginPasswordVerificationHandler implements LoginHandler {
+
     @Override
-    public int order() { return 40; }
+    public int order() {
+        return 40;
+    }
 
     @Override
     public void handle(LoginContext context) {

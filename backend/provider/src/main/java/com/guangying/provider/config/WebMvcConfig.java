@@ -27,6 +27,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 请求上下文 → 日志 → 鉴权，order 明确保证拦截链顺序
         registry.addInterceptor(requestContextInterceptor)
                 .order(0)
                 .addPathPatterns("/**")
@@ -42,11 +43,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(jwtAuthInterceptor)
                 .order(20)
                 .addPathPatterns(
-                        "/api/auth/me",
+                        "/api/auth/me",   // 当前用户
                         "/api/order/**",    // 订单操作
                         "/api/seat/**",     // 座位操作
                         "/api/payment/**",  // 支付操作
                         "/api/queue/**",    // 排队操作
+                        "/api/admin/**",    // 管理操作（Controller内继续校验ADMIN角色）
                         "/ajax/wish/**"     // 想看操作
                 )
                 .excludePathPatterns(

@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +29,18 @@ public class QueueService {
     @Autowired(required = false)
     private StringRedisTemplate stringRedisTemplate;
 
+    /** 单场次最大等待人数，防止异常流量无限扩张 Redis ZSet。 */
+    @Value("${guangying.queue.max-waiting:100000}")
+    private int maxWaiting;
+
+    /** 热门场次默认允许同时持有准入租约的人数，超出后才进入等待队列。 */
+    @Value("${guangying.queue.default-max-admission:2000}")
+    private int defaultMaxAdmission;
+
+    /** 防止管理接口误配置出无界活跃会话。 */
+    @Value("${guangying.queue.max-admission-upper-bound:20000}")
+    private int maxAdmissionUpperBound;
+
     private static final String ENTER_LUA = """
             local admit_key = KEYS[1]
             local max_key = KEYS[2]
@@ -38,6 +51,7 @@ public class QueueService {
             local ttl = tonumber(ARGV[2])
             local now = tonumber(ARGV[3])
             local token_prefix = ARGV[4]
+            local max_waiting = tonumber(ARGV[5])
             local expires_at = now + ttl * 1000
 
             local expired = redis.call('ZRANGEBYSCORE', lease_key, '-inf', now)
@@ -75,6 +89,10 @@ public class QueueService {
                 redis.call('SET', token_key, '1', 'EX', ttl)
                 redis.call('SET', admit_key, redis.call('ZCARD', lease_key))
                 return {1, 0, 0}
+            end
+
+            if redis.call('ZCARD', waiting_key) >= max_waiting then
+                return {-1, 0, 0}
             end
 
             redis.call('ZADD', waiting_key, now, user_id)
@@ -165,9 +183,18 @@ public class QueueService {
         }
     }
 
-    public void initHotSchedule(Long scheduleId, int maxAdmission) {
-        if (stringRedisTemplate == null) return;
-        if (maxAdmission <= 0) throw new IllegalArgumentException("maxAdmission must be positive");
+    public void initHotSchedule(Long scheduleId, Integer requestedMaxAdmission) {
+        if (stringRedisTemplate == null) {
+            throw new BizException(ResponseCodeEnum.INTERNAL_ERROR.getCode(),
+                    "Redis 未启用，无法开启热门场次排队");
+        }
+        int maxAdmission = requestedMaxAdmission == null
+                ? defaultMaxAdmission
+                : requestedMaxAdmission;
+        if (maxAdmission <= 0 || maxAdmission > maxAdmissionUpperBound) {
+            throw new IllegalArgumentException(
+                    "maxAdmission must be between 1 and " + maxAdmissionUpperBound);
+        }
         try {
             stringRedisTemplate.opsForValue().set(
                     queueKey(CacheConstants.QUEUE_MAX_PREFIX, scheduleId),
@@ -179,6 +206,8 @@ public class QueueService {
                     scheduleId, maxAdmission);
         } catch (Exception e) {
             log.error("[Queue] Failed to init hot schedule: {}", scheduleId, e);
+            throw new BizException(ResponseCodeEnum.INTERNAL_ERROR.getCode(),
+                    "热门场次初始化失败");
         }
     }
 
@@ -195,13 +224,20 @@ public class QueueService {
                     String.valueOf(userId),
                     String.valueOf(CacheConstants.QUEUE_TOKEN_TTL_SECONDS),
                     String.valueOf(System.currentTimeMillis()),
-                    tokenPrefix(scheduleId));
+                    tokenPrefix(scheduleId),
+                    String.valueOf(Math.max(1, maxWaiting)));
             if (result != null && !result.isEmpty()) {
-                boolean admitted = ((Number) result.get(0)).intValue() == 1;
+                int decision = ((Number) result.get(0)).intValue();
+                if (decision < 0) {
+                    throw new BizException(ResponseCodeEnum.QUEUE_FULL);
+                }
+                boolean admitted = decision == 1;
                 int position = result.size() > 1 ? ((Number) result.get(1)).intValue() : 0;
                 int estimated = result.size() > 2 ? ((Number) result.get(2)).intValue() : 0;
                 return new QueueEnterResult(admitted, position, estimated);
             }
+        } catch (BizException e) {
+            throw e;
         } catch (Exception e) {
             log.error("[Queue] Enter failed: scheduleId={}, userId={}", scheduleId, userId, e);
             throw new BizException(ResponseCodeEnum.INTERNAL_ERROR.getCode(),

@@ -3,6 +3,7 @@ package com.guangying.provider.controller;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.guangying.common.annotation.RateLimit;
+import com.guangying.common.enums.RateLimitDimension;
 import com.guangying.domain.model.po.CinemaPO;
 import com.guangying.domain.model.vo.MovieVO;
 import com.guangying.domain.model.vo.Result;
@@ -32,7 +33,9 @@ public class ScheduleController {
      * 获取电影某日场次列表
      */
     @GetMapping("/schedules")
-    @RateLimit(key = "schedules", maxRequests = 60, windowSeconds = 60)
+    @RateLimit(key = "schedules", maxRequests = 120, windowSeconds = 60)
+    @RateLimit(key = "schedules", dimension = RateLimitDimension.GLOBAL,
+            maxRequests = 60000, windowSeconds = 60)
     public Result<List<ScheduleVO>> getSchedules(
             @RequestParam Long movieId,
             @RequestParam(required = false) String showDate) {

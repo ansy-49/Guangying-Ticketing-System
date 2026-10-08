@@ -62,6 +62,18 @@ class PurchaseFlowIntegrationTest {
                 .andExpect(jsonPath("$.data.account").value(account))
                 .andExpect(header().exists("X-Request-Id"));
 
+        // 普通用户即使持有有效 JWT，也不能初始化热门场次或操作 Outbox 死信。
+        mockMvc.perform(post("/api/queue/admin/init-hot")
+                        .header("Authorization", "Bearer " + token)
+                        .param("scheduleId", "1")
+                        .param("maxAdmission", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(403));
+        mockMvc.perform(get("/api/admin/outbox/dead")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(403));
+
         mockMvc.perform(get("/ajax/movieOnInfoList"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.movieList").isArray());
@@ -87,6 +99,8 @@ class PurchaseFlowIntegrationTest {
         JsonNode order = objectMapper.readTree(orderBody).path("data");
         String orderNo = order.path("orderNo").asText();
 
+        // 客户端因网络超时重试同一锁座请求时，应返回原待支付订单，
+        // 不能重复扣库存、重复建单或释放第一次请求持有的锁。
         mockMvc.perform(post("/api/seat/lock")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)

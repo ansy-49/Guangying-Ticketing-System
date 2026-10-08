@@ -5,6 +5,9 @@ import com.guangying.service.infrastructure.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * 滑动窗口策略：适合普通 API 的精确窗口计数。
+ */
 @Component
 @RequiredArgsConstructor
 public class SlidingWindowRateLimitStrategy implements RateLimitStrategy {

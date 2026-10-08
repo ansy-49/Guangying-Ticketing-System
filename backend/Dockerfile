@@ -1,5 +1,5 @@
 # =========================================
-# 光影票务后端 - 预构建 JAR 部署 Dockerfile
+# 光影后端 - 预构建 JAR 部署 Dockerfile
 #
 # 本地打包好 JAR 后直接 COPY，跳过服务器编译
 # =========================================
@@ -7,7 +7,7 @@
 FROM eclipse-temurin:21-jre-alpine
 
 LABEL maintainer="guangying-team"
-LABEL description="光影票务电影后端服务"
+LABEL description="光影电影后端服务"
 
 WORKDIR /app
 

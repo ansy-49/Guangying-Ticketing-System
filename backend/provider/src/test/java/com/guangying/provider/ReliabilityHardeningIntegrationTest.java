@@ -7,6 +7,7 @@ import com.guangying.domain.exception.OrderExpiredException;
 import com.guangying.domain.model.po.OrderPO;
 import com.guangying.domain.model.po.OutboxEventPO;
 import com.guangying.service.PaymentService;
+import com.guangying.service.mq.OrderEventProcessor;
 import com.guangying.service.infrastructure.OutboxService;
 import com.guangying.service.infrastructure.TransactionCallbacks;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,9 @@ class ReliabilityHardeningIntegrationTest {
     @Autowired
     private OrderMapper orderMapper;
 
+    @Autowired
+    private OrderEventProcessor orderEventProcessor;
+
     @Test
     void outboxEventCanOnlyBeClaimedByOneInstance() {
         outboxService.writeEvent("ORDER_CREATED", Map.of("orderNo", "claim-test"));
@@ -69,6 +73,29 @@ class ReliabilityHardeningIntegrationTest {
         assertEquals(1, outboxEventMapper.markRetry(
                 event.getId(), firstClaim, 10, now.minusSeconds(1), "test retry"));
         assertTrue(outboxEventMapper.selectClaimable(now, 20).stream()
+                .anyMatch(item -> item.getId().equals(event.getId())));
+    }
+
+    @Test
+    void deadOutboxEventCanBeListedAndExplicitlyRequeued() {
+        outboxService.writeEvent("ORDER_CREATED", Map.of("orderNo", "dead-replay-test"));
+        LocalDateTime now = LocalDateTime.now();
+        OutboxEventPO event = outboxEventMapper.selectClaimable(now.plusSeconds(1), 100).stream()
+                .filter(item -> item.getPayload().contains("dead-replay-test"))
+                .findFirst()
+                .orElseThrow();
+        String claim = UUID.randomUUID().toString();
+
+        assertEquals(1, outboxEventMapper.tryClaim(
+                event.getId(), claim, now, now.plusSeconds(30)));
+        assertEquals(1, outboxEventMapper.markRetry(
+                event.getId(), claim, 1, now.plusMinutes(1), "permanent test failure"));
+        assertTrue(outboxService.listDead(50).stream()
+                .anyMatch(item -> item.getId().equals(event.getId())));
+
+        assertTrue(outboxService.retryDead(event.getId()));
+        assertFalse(outboxService.retryDead(event.getId()));
+        assertTrue(outboxEventMapper.selectClaimable(LocalDateTime.now().plusSeconds(1), 100).stream()
                 .anyMatch(item -> item.getId().equals(event.getId())));
     }
 
@@ -118,5 +145,37 @@ class ReliabilityHardeningIntegrationTest {
         assertTrue(outboxEventMapper.selectClaimable(LocalDateTime.now().plusSeconds(1), 100)
                 .stream()
                 .anyMatch(event -> event.getPayload().contains(orderNo)));
+    }
+
+    @Test
+    void timeoutEventClosesOrderOnceAndRecordsReason() {
+        String orderNo = "timeout-event-" + UUID.randomUUID();
+        String eventId = "timeout-event-id-" + UUID.randomUUID();
+        OrderPO order = new OrderPO();
+        order.setOrderNo(orderNo);
+        order.setUserId(8_888L);
+        order.setIdempotencyKey("timeout-" + UUID.randomUUID());
+        order.setRequestFingerprint("timeout-test-fixture");
+        order.setScheduleId(1L);
+        order.setSeatCount(0);
+        order.setStatus(OrderStatusEnum.PENDING.getCode());
+        order.setExpireTime(LocalDateTime.now().minusSeconds(1));
+        orderMapper.insert(order);
+
+        String event = "{\"type\":\"ORDER_TIMEOUT_CHECK\",\"eventId\":\""
+                + eventId + "\",\"orderNo\":\"" + orderNo + "\"}";
+        orderEventProcessor.process(event);
+        orderEventProcessor.process(event);
+
+        OrderPO closed = orderMapper.selectByOrderNo(orderNo);
+        assertEquals(OrderStatusEnum.CANCELLED.getCode(), closed.getStatus());
+        assertEquals("DELAY_MESSAGE", closed.getCancelReason());
+        long cancellationEvents = outboxEventMapper
+                .selectClaimable(LocalDateTime.now().plusSeconds(1), 200)
+                .stream()
+                .filter(item -> "ORDER_CANCELLED".equals(item.getEventType()))
+                .filter(item -> item.getPayload().contains(orderNo))
+                .count();
+        assertEquals(1L, cancellationEvents);
     }
 }
